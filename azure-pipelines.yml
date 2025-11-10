@@ -38,10 +38,11 @@ stages:
     displayName: Build, Push, and Deploy
     steps:
     
-    # 1. Decode the Base64 key and write it to a file (THE ULTRA-ROBUST FIX)
+    # 1. Write the raw SA Key to a temporary file
+    # NOTE: This requires the GCP_SA_KEY secret to contain the raw JSON string.
     - script: |
-        echo "$(GCP_SA_KEY)" | sed 's/\n//g' | sed 's/\r//g' | base64 --decode > $(Agent.TempDirectory)/gcp-key.json
-      displayName: '1. Decode and Write SA Key'
+        echo '$(GCP_SA_KEY)' > $(Agent.TempDirectory)/gcp-key.json
+      displayName: '1. Write SA Key'
 
     # 2. Activate the Service Account (Auth)
     - script: |
