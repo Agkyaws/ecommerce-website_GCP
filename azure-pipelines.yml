@@ -38,10 +38,10 @@ stages:
     displayName: Build, Push, and Deploy
     steps:
     
-    # 1. CORRECTED: Write the SA Key directly (NO DECODING)
+    # 1. Decode the Base64 key and write it to a file (THE ULTRA-ROBUST FIX)
     - script: |
-        echo '$(GCP_SA_KEY)' > $(Agent.TempDirectory)/gcp-key.json
-      displayName: '1. Write SA Key (Correct Method)'
+        echo "$(GCP_SA_KEY)" | sed 's/\n//g' | sed 's/\r//g' | base64 --decode > $(Agent.TempDirectory)/gcp-key.json
+      displayName: '1. Decode and Write SA Key'
 
     # 2. Activate the Service Account (Auth)
     - script: |
@@ -53,13 +53,15 @@ stages:
     - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
       displayName: '3. Configure Docker for Artifact Registry'
       
-    # 4. Build the Docker Image (using the native Docker@2 task)
+    # 4. Build the Docker Image (FIXED PATHS)
     - task: Docker@2
       displayName: '4. Build Docker Image'
       inputs:
         command: 'build'
-        Dockerfile: '$(Build.SourcesDirectory)/$(APP_FOLDER)/Dockerfile'
-        buildContext: '$(Build.SourcesDirectory)/$(APP_FOLDER)'
+        # Dockerfile is now relative to the source root
+        Dockerfile: '$(APP_FOLDER)/Dockerfile'
+        # buildContext is the folder containing the Dockerfile (relative to source root)
+        buildContext: '$(APP_FOLDER)'
         tags: |
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
