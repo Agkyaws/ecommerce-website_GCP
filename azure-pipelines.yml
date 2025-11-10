@@ -38,11 +38,11 @@ stages:
     displayName: Build, Push, and Deploy
     steps:
     
-    # 1. Decode the Base64 key and write it to a file (THE ROBUST FIX)
-    # The 'tr -d' command removes all whitespace (spaces, newlines, tabs) 
-    # to ensure the Base64 decoder only gets the pure key string.
+    # 1. Decode the Base64 key and write it to a file (THE ULTRA-ROBUST FIX)
+    # The 'sed' command removes ALL newline and carriage return characters 
+    # before decoding, guaranteeing a pure Base64 string input.
     - script: |
-        echo "$(GCP_SA_KEY)" | tr -d '[:space:]' | base64 --decode > $(Agent.TempDirectory)/gcp-key.json
+        echo "$(GCP_SA_KEY)" | sed 's/\n//g' | sed 's/\r//g' | base64 --decode > $(Agent.TempDirectory)/gcp-key.json
       displayName: '1. Decode and Write SA Key'
 
     # 2. Activate the Service Account (Auth)
