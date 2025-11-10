@@ -19,7 +19,7 @@ variables:
   
   # This MUST match the name of the "Service Connection" you create
   # in your Azure DevOps project settings.
-  GCP_SERVICE_CONNECTION: 'gcp-production'
+  GCP_SERVICE_CONNECTION: 'gcp-dev'
   
   GCP_REGION: 'us-central1'
   
