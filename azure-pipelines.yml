@@ -11,20 +11,26 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
-# Link to the secure variable group created in ADO Library
+# --- COMBINED VARIABLES ---
+# This single list contains the Variable Group link and all local variables.
 variables:
-- group: gcp-secrets
+- group: gcp-secrets # Link to the secure variable group
 
-# --- PROJECT VARIABLES ---
-variables:
-  GCP_PROJECT_ID: 'tranquil-leaf-472813-v8'
-  GCP_REGION: 'us-central1'
-  GCP_SERVICE_NAME: 'shop-app'
-  # This is the Docker path from your 'terraform output'
-  DOCKER_REGISTRY_PATH: 'us-central1-docker.pkg.dev/tranquil-leaf-472813-v8/shop-app-repo'
-  IMAGE_NAME: 'shop-app'
-  IMAGE_TAG: '$(Build.BuildId)'
-  APP_FOLDER: 'app' 
+# Project Configuration Variables (Converted to correct list format)
+- name: GCP_PROJECT_ID
+  value: 'tranquil-leaf-472813-v8'
+- name: GCP_REGION
+  value: 'us-central1'
+- name: GCP_SERVICE_NAME
+  value: 'shop-app'
+- name: DOCKER_REGISTRY_PATH
+  value: 'us-central1-docker.pkg.dev/tranquil-leaf-472813-v8/shop-app-repo'
+- name: IMAGE_NAME
+  value: 'shop-app'
+- name: IMAGE_TAG
+  value: '$(Build.BuildId)'
+- name: APP_FOLDER
+  value: 'app' 
 
 # --- PIPELINE STAGES ---
 stages:
@@ -42,14 +48,12 @@ stages:
       displayName: '1. Write SA Key to Temp File'
 
     # 2. Activate the Service Account
-    # This replaces the GoogleCloudSdkAuth task
     - script: |
         # Authenticate using the key file, requires gcloud to be installed on agent
         gcloud auth activate-service-account --key-file=$(Agent.TempDirectory)/gcp-key.json --project=$(GCP_PROJECT_ID)
       displayName: '2. Activate Service Account (Auth)'
       
     # 3. Configure Docker for Google Artifact Registry
-    # This uses the active gcloud login to set up Docker authentication
     - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
       displayName: '3. Configure Docker for Artifact Registry'
       
