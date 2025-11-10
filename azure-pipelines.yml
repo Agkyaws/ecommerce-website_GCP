@@ -39,7 +39,6 @@ stages:
     steps:
     
     # 1. Write the raw SA Key to a temporary file
-    # NOTE: This is the temporary solution for corrupted JSON key data
     - script: |
         echo '$(GCP_SA_KEY)' > $(Agent.TempDirectory)/gcp-key.json
       displayName: '1. Write SA Key (Raw JSON)'
@@ -51,34 +50,29 @@ stages:
       displayName: '2. Activate Service Account (Auth)'
       
     # 3. Configure Docker for Google Artifact Registry
+    # This sets the credentials for the subsequent Docker commands
     - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
       displayName: '3. Configure Docker for Artifact Registry'
       
-    # 4. Build the Docker Image (FIXED PATHS)
+    # 4. Build the Docker Image 
     - task: Docker@2
       displayName: '4. Build Docker Image'
       inputs:
         command: 'build'
-        # Change directory to the app folder first
         workingDirectory: '$(APP_FOLDER)'
-        # Dockerfile path is now local to the working directory
         Dockerfile: 'Dockerfile'
-        # Build context is the current folder (the app folder)
         buildContext: '.'
         tags: |
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
           
-    # 5. Push the Docker Image (FIXED PATHS)
-    - task: Docker@2
-      displayName: '5. Push Docker Image'
-      inputs:
-        command: 'push'
-        # The working directory setting from build carries over, making this robust
-        workingDirectory: '$(APP_FOLDER)'
-        tags: |
-          $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
-          $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
+    # 5. Push the Docker Image (TRUE FIX: Using native docker CLI)
+    - script: |
+        docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
+        docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
+      displayName: '5. Push Docker Image (Native Push)'
+      # Must run from the working directory where the image was built
+      workingDirectory: '$(APP_FOLDER)'
           
     # 6. Deploy to Cloud Run (using the native gcloud CLI)
     - script: |
