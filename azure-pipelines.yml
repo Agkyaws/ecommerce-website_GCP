@@ -12,11 +12,8 @@ pool:
   vmImage: 'ubuntu-latest'
 
 # --- COMBINED VARIABLES ---
-# This single list contains the Variable Group link and all local variables.
 variables:
 - group: gcp-secrets # Link to the secure variable group
-
-# Project Configuration Variables (Converted to correct list format)
 - name: GCP_PROJECT_ID
   value: 'tranquil-leaf-472813-v8'
 - name: GCP_REGION
@@ -41,15 +38,15 @@ stages:
     displayName: Build, Push, and Deploy
     steps:
     
-    # 1. Write the secret JSON key to a temporary file
-    # Uses the secure variable GCP_SA_KEY from the linked variable group
+    # 1. Decode the Base64 key and write it to a file
+    # This ensures the JSON file is created perfectly, without quotes or formatting errors.
     - script: |
-        echo "$(GCP_SA_KEY)" > $(Agent.TempDirectory)/gcp-key.json
-      displayName: '1. Write SA Key to Temp File'
+        echo "$(GCP_SA_KEY)" | base64 --decode > $(Agent.TempDirectory)/gcp-key.json
+      displayName: '1. Decode and Write SA Key'
 
-    # 2. Activate the Service Account
+    # 2. Activate the Service Account (Auth)
     - script: |
-        # Authenticate using the key file, requires gcloud to be installed on agent
+        # Authenticate using the key file
         gcloud auth activate-service-account --key-file=$(Agent.TempDirectory)/gcp-key.json --project=$(GCP_PROJECT_ID)
       displayName: '2. Activate Service Account (Auth)'
       
