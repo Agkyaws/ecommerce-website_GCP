@@ -66,13 +66,13 @@ stages:
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
           
-    # 5. Push the Docker Image (FIXED WORKING DIRECTORY)
+    # 5. Push the Docker Image (FIXED: Using CD inside the script)
     - script: |
+        cd $(APP_FOLDER) # Change directory relative to the sources directory
         docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
         docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
       displayName: '5. Push Docker Image (Native Push)'
-      # FIX: Use the absolute path for the script step's working directory
-      workingDirectory: '$(Build.SourcesDirectory)/$(APP_FOLDER)' 
+      # Removed 'workingDirectory' input to prevent path conflict.
           
     # 6. Deploy to Cloud Run (using the native gcloud CLI)
     - script: |
