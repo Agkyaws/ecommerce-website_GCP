@@ -13,7 +13,7 @@ pool:
 
 # --- COMBINED VARIABLES ---
 variables:
-- group: gcp-secrets # Link to the secure variable group
+- group: gcp-secrets
 - name: GCP_PROJECT_ID
   value: 'tranquil-leaf-472813-v8'
 - name: GCP_REGION
@@ -26,8 +26,6 @@ variables:
   value: 'shop-app'
 - name: IMAGE_TAG
   value: '$(Build.BuildId)'
-- name: APP_FOLDER
-  value: 'app' 
 
 # --- PIPELINE STAGES ---
 stages:
@@ -43,40 +41,33 @@ stages:
         echo '$(GCP_SA_KEY)' > $(Agent.TempDirectory)/gcp-key.json
       displayName: '1. Write SA Key (Raw JSON)'
 
-    # 2. Activate the Service Account (Auth)
+    # 2. Activate the Service Account
     - script: |
-        # Authenticate using the key file
         gcloud auth activate-service-account --key-file=$(Agent.TempDirectory)/gcp-key.json --project=$(GCP_PROJECT_ID)
-      displayName: '2. Activate Service Account (Auth)'
+      displayName: '2. Activate Service Account'
       
-    # 3. Configure Docker for Google Artifact Registry
-    # This sets the credentials for the subsequent Docker commands
+    # 3. Configure Docker for Artifact Registry
     - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
       displayName: '3. Configure Docker for Artifact Registry'
       
-    # 4. Build the Docker Image 
-    - task: Docker@2
+    # 4. Build the Docker Image (FIXED: Using script with correct path)
+    - script: |
+        cd app
+        docker build -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest .
       displayName: '4. Build Docker Image'
-      inputs:
-        command: 'build'
-        workingDirectory: '$(APP_FOLDER)'
-        Dockerfile: 'Dockerfile'
-        buildContext: '.'
-        tags: |
-          $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
-          $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
-          
-    # 5. Push the Docker Image (FIXED: Remove cd command since docker push doesn't need app context)
+      
+    # 5. Push the Docker Image
     - script: |
         docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
         docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
-      displayName: '5. Push Docker Image (Native Push)'
+      displayName: '5. Push Docker Image'
           
-    # 6. Deploy to Cloud Run (using the native gcloud CLI)
+    # 6. Deploy to Cloud Run
     - script: |
         gcloud run deploy $(GCP_SERVICE_NAME) \
           --image=$(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) \
           --region=$(GCP_REGION) \
           --project=$(GCP_PROJECT_ID) \
-          --platform=managed
+          --platform=managed \
+          --allow-unauthenticated
       displayName: '6. Deploy to Cloud Run'
