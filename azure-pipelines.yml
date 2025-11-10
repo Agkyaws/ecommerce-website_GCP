@@ -38,10 +38,11 @@ stages:
     displayName: Build, Push, and Deploy
     steps:
     
-    # 1. Decode the Base64 key and write it to a file
-    # This ensures the JSON file is created perfectly, without quotes or formatting errors.
+    # 1. Decode the Base64 key and write it to a file (THE ROBUST FIX)
+    # The 'tr -d' command removes all whitespace (spaces, newlines, tabs) 
+    # to ensure the Base64 decoder only gets the pure key string.
     - script: |
-        echo "$(GCP_SA_KEY)" | base64 --decode > $(Agent.TempDirectory)/gcp-key.json
+        echo "$(GCP_SA_KEY)" | tr -d '[:space:]' | base64 --decode > $(Agent.TempDirectory)/gcp-key.json
       displayName: '1. Decode and Write SA Key'
 
     # 2. Activate the Service Account (Auth)
