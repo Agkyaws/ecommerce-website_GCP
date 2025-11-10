@@ -11,32 +11,19 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
-# --- CRITICAL VARIABLES ---
-# All your project-specific settings are defined here.
+# Link to the secure variable group created in ADO Library
 variables:
-  # --- Google Cloud Project ---
-  GCP_PROJECT_ID: 'tranquil-leaf-472813-v8'
-  
-  # This MUST match the name of the "Service Connection" you create
-  # in your Azure DevOps project settings.
-  GCP_SERVICE_CONNECTION: 'gcp-dev'
-  
-  GCP_REGION: 'us-central1'
-  
-  # This is the name of the Cloud Run service from your main.tf
-  GCP_SERVICE_NAME: 'shop-app'
+- group: gcp-secrets
 
-  # --- Docker Image Details ---
-  
+# --- PROJECT VARIABLES ---
+variables:
+  GCP_PROJECT_ID: 'tranquil-leaf-472813-v8'
+  GCP_REGION: 'us-central1'
+  GCP_SERVICE_NAME: 'shop-app'
   # This is the Docker path from your 'terraform output'
   DOCKER_REGISTRY_PATH: 'us-central1-docker.pkg.dev/tranquil-leaf-472813-v8/shop-app-repo'
-  
   IMAGE_NAME: 'shop-app'
-  
-  # Use the unique build ID as the version tag for each new build
   IMAGE_TAG: '$(Build.BuildId)'
-  
-  # This is the sub-folder where your Dockerfile/app.py are
   APP_FOLDER: 'app' 
 
 # --- PIPELINE STAGES ---
@@ -48,53 +35,49 @@ stages:
     displayName: Build, Push, and Deploy
     steps:
     
-    # 1. Install gcloud tools (needed by the agent)
-    - task: GoogleCloudToolsInstaller@2
-      displayName: 'Install Google Cloud Tools'
+    # 1. Write the secret JSON key to a temporary file
+    # Uses the secure variable GCP_SA_KEY from the linked variable group
+    - script: |
+        echo "$(GCP_SA_KEY)" > $(Agent.TempDirectory)/gcp-key.json
+      displayName: '1. Write SA Key to Temp File'
 
-    # 2. Authenticate to Google Cloud
-    # Uses the 'gcp-production' Service Connection you will create
-    - task: GoogleCloudSdkAuth@1
-      displayName: 'Authenticate to Google Cloud'
-      inputs:
-        serviceAccount: $(GCP_SERVICE_CONNECTION)
-        
-    # 3. Configure Docker
-    # Authenticates Docker with Google Artifact Registry
-    - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
-      displayName: 'Configure Docker for Artifact Registry'
+    # 2. Activate the Service Account
+    # This replaces the GoogleCloudSdkAuth task
+    - script: |
+        # Authenticate using the key file, requires gcloud to be installed on agent
+        gcloud auth activate-service-account --key-file=$(Agent.TempDirectory)/gcp-key.json --project=$(GCP_PROJECT_ID)
+      displayName: '2. Activate Service Account (Auth)'
       
-    # 4. Build the Docker Image
-    # This reads your Dockerfile from the 'app' sub-folder
+    # 3. Configure Docker for Google Artifact Registry
+    # This uses the active gcloud login to set up Docker authentication
+    - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
+      displayName: '3. Configure Docker for Artifact Registry'
+      
+    # 4. Build the Docker Image (using the native Docker@2 task)
     - task: Docker@2
-      displayName: 'Build Docker Image'
+      displayName: '4. Build Docker Image'
       inputs:
         command: 'build'
-        # Path to the Dockerfile
         Dockerfile: '$(Build.SourcesDirectory)/$(APP_FOLDER)/Dockerfile'
-        # The "context" is the folder with all your code (app.py, etc.)
         buildContext: '$(Build.SourcesDirectory)/$(APP_FOLDER)'
-        # Tag the image with the Build ID and 'latest'
         tags: |
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
           
-    # 5. Push the Docker Image
-    # Pushes the image to your private Artifact Registry
+    # 5. Push the Docker Image (using the native Docker@2 task)
     - task: Docker@2
-      displayName: 'Push Docker Image'
+      displayName: '5. Push Docker Image'
       inputs:
         command: 'push'
         tags: |
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
           
-    # 6. Deploy to Cloud Run
-    # This tells your Cloud Run service to use the new image
+    # 6. Deploy to Cloud Run (using the native gcloud CLI)
     - script: |
         gcloud run deploy $(GCP_SERVICE_NAME) \
           --image=$(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) \
           --region=$(GCP_REGION) \
           --project=$(GCP_PROJECT_ID) \
           --platform=managed
-      displayName: 'Deploy to Cloud Run'
+      displayName: '6. Deploy to Cloud Run'
