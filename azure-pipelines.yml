@@ -1,0 +1,100 @@
+# This pipeline is triggered by pushes to the 'main' branch
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - 'app/*' # Only run if the 'app' folder changes
+
+# Use a standard Ubuntu agent from Microsoft's pool
+pool:
+  vmImage: 'ubuntu-latest'
+
+# --- CRITICAL VARIABLES ---
+# All your project-specific settings are defined here.
+variables:
+  # --- Google Cloud Project ---
+  GCP_PROJECT_ID: 'tranquil-leaf-472813-v8'
+  
+  # This MUST match the name of the "Service Connection" you create
+  # in your Azure DevOps project settings.
+  GCP_SERVICE_CONNECTION: 'gcp-production'
+  
+  GCP_REGION: 'us-central1'
+  
+  # This is the name of the Cloud Run service from your main.tf
+  GCP_SERVICE_NAME: 'shop-app'
+
+  # --- Docker Image Details ---
+  
+  # This is the Docker path from your 'terraform output'
+  DOCKER_REGISTRY_PATH: 'us-central1-docker.pkg.dev/tranquil-leaf-472813-v8/shop-app-repo'
+  
+  IMAGE_NAME: 'shop-app'
+  
+  # Use the unique build ID as the version tag for each new build
+  IMAGE_TAG: '$(Build.BuildId)'
+  
+  # This is the sub-folder where your Dockerfile/app.py are
+  APP_FOLDER: 'app' 
+
+# --- PIPELINE STAGES ---
+stages:
+- stage: Build_and_Deploy
+  displayName: Build and Deploy to Cloud Run
+  jobs:
+  - job: Deploy
+    displayName: Build, Push, and Deploy
+    steps:
+    
+    # 1. Install gcloud tools (needed by the agent)
+    - task: GoogleCloudToolsInstaller@2
+      displayName: 'Install Google Cloud Tools'
+
+    # 2. Authenticate to Google Cloud
+    # Uses the 'gcp-production' Service Connection you will create
+    - task: GoogleCloudSdkAuth@1
+      displayName: 'Authenticate to Google Cloud'
+      inputs:
+        serviceAccount: $(GCP_SERVICE_CONNECTION)
+        
+    # 3. Configure Docker
+    # Authenticates Docker with Google Artifact Registry
+    - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
+      displayName: 'Configure Docker for Artifact Registry'
+      
+    # 4. Build the Docker Image
+    # This reads your Dockerfile from the 'app' sub-folder
+    - task: Docker@2
+      displayName: 'Build Docker Image'
+      inputs:
+        command: 'build'
+        # Path to the Dockerfile
+        Dockerfile: '$(Build.SourcesDirectory)/$(APP_FOLDER)/Dockerfile'
+        # The "context" is the folder with all your code (app.py, etc.)
+        buildContext: '$(Build.SourcesDirectory)/$(APP_FOLDER)'
+        # Tag the image with the Build ID and 'latest'
+        tags: |
+          $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
+          $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
+          
+    # 5. Push the Docker Image
+    # Pushes the image to your private Artifact Registry
+    - task: Docker@2
+      displayName: 'Push Docker Image'
+      inputs:
+        command: 'push'
+        tags: |
+          $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
+          $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
+          
+    # 6. Deploy to Cloud Run
+    # This tells your Cloud Run service to use the new image
+    - script: |
+        gcloud run deploy $(GCP_SERVICE_NAME) \
+          --image=$(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) \
+          --region=$(GCP_REGION) \
+          --project=$(GCP_PROJECT_ID) \
+          --platform=managed
+      displayName: 'Deploy to Cloud Run'
