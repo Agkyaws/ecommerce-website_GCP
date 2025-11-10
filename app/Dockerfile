@@ -4,6 +4,13 @@ FROM python:3.10-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Install system dependencies required for psycopg2
+RUN apt-get update && apt-get install -y \
+    gcc \
+    python3-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the requirements file
 COPY requirements.txt .
 
@@ -11,12 +18,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of your application code
-# (app.py, index.html, and the 'static' folder)
 COPY . .
 
 # Get the PORT from the environment (Cloud Run injects this)
 ENV PORT 8080
 
 # Use Gunicorn as the production web server
-# This runs your 'app.py' file (app:app)
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "app:app"]
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 app:app

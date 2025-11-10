@@ -3,15 +3,10 @@ trigger:
   branches:
     include:
       - main
-  paths:
-    include:
-      - 'app/*' # Only run if the 'app' folder changes
 
-# Use a standard Ubuntu agent from Microsoft's pool
 pool:
   vmImage: 'ubuntu-latest'
 
-# --- COMBINED VARIABLES ---
 variables:
 - group: gcp-secrets
 - name: GCP_PROJECT_ID
@@ -27,7 +22,6 @@ variables:
 - name: IMAGE_TAG
   value: '$(Build.BuildId)'
 
-# --- PIPELINE STAGES ---
 stages:
 - stage: Build_and_Deploy
   displayName: Build and Deploy to Cloud Run
@@ -50,7 +44,7 @@ stages:
     - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
       displayName: '3. Configure Docker for Artifact Registry'
       
-    # 4. Build the Docker Image (FIXED: Using script with correct path)
+    # 4. Build the Docker Image
     - script: |
         cd app
         docker build -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest .
@@ -62,12 +56,16 @@ stages:
         docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
       displayName: '5. Push Docker Image'
           
-    # 6. Deploy to Cloud Run
+    # 6. Deploy to Cloud Run with Database Configuration
     - script: |
         gcloud run deploy $(GCP_SERVICE_NAME) \
           --image=$(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) \
           --region=$(GCP_REGION) \
           --project=$(GCP_PROJECT_ID) \
           --platform=managed \
-          --allow-unauthenticated
+          --allow-unauthenticated \
+          --timeout=600 \
+          --cpu=1 \
+          --memory=1Gi \
+          --set-env-vars=DB_HOST=$(DB_HOST),DB_NAME=$(DB_NAME),DB_USER=$(DB_USER),DB_PASS=$(DB_PASS),PORT=8080
       displayName: '6. Deploy to Cloud Run'
