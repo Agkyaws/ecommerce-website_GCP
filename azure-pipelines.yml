@@ -39,10 +39,10 @@ stages:
     steps:
     
     # 1. Write the raw SA Key to a temporary file
-    # NOTE: This requires the GCP_SA_KEY secret to contain the raw JSON string.
+    # NOTE: This is the temporary solution for corrupted JSON key data
     - script: |
         echo '$(GCP_SA_KEY)' > $(Agent.TempDirectory)/gcp-key.json
-      displayName: '1. Write SA Key'
+      displayName: '1. Write SA Key (Raw JSON)'
 
     # 2. Activate the Service Account (Auth)
     - script: |
@@ -59,19 +59,23 @@ stages:
       displayName: '4. Build Docker Image'
       inputs:
         command: 'build'
-        # Dockerfile is now relative to the source root
-        Dockerfile: '$(APP_FOLDER)/Dockerfile'
-        # buildContext is the folder containing the Dockerfile (relative to source root)
-        buildContext: '$(APP_FOLDER)'
+        # Change directory to the app folder first
+        workingDirectory: '$(APP_FOLDER)'
+        # Dockerfile path is now local to the working directory
+        Dockerfile: 'Dockerfile'
+        # Build context is the current folder (the app folder)
+        buildContext: '.'
         tags: |
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
           
-    # 5. Push the Docker Image (using the native Docker@2 task)
+    # 5. Push the Docker Image (FIXED PATHS)
     - task: Docker@2
       displayName: '5. Push Docker Image'
       inputs:
         command: 'push'
+        # The working directory setting from build carries over, making this robust
+        workingDirectory: '$(APP_FOLDER)'
         tags: |
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
           $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
