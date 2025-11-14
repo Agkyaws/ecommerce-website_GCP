@@ -81,7 +81,7 @@
                 <button id="seller-btn" class="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm hidden">
                     Seller Panel
                 </button>
-                <button id="api-docs-btn" class="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                <button id="api-docs-btn" class="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors text-sm hidden">
                     API Docs
                 </button>
                 <button id="cart-button" class="relative bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors">
@@ -121,6 +121,9 @@
         <!-- Checkout Page -->
         <div id="checkout-page" class="hidden">
             <h2 class="text-3xl font-bold text-gray-800 mb-8">Your Cart</h2>
+            <div id="guest-cart-message" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 hidden">
+                <p class="text-yellow-800">Please <button id="login-from-cart" class="text-primary-600 hover:text-primary-700 underline font-medium">login</button> to proceed with checkout.</p>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 
                 <div id="cart-items-container" class="md:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -156,8 +159,11 @@
                         <p id="discount-message" class="text-sm mt-2"></p>
                     </form>
 
-                    <button class="w-full bg-green-600 text-white py-3 rounded-lg text-lg font-bold mt-6 hover:bg-green-700 transition-colors">
+                    <button id="checkout-btn" class="w-full bg-green-600 text-white py-3 rounded-lg text-lg font-bold mt-6 hover:bg-green-700 transition-colors">
                         Proceed to Checkout
+                    </button>
+                    <button id="guest-checkout-btn" class="w-full bg-primary-600 text-white py-3 rounded-lg text-lg font-bold mt-6 hover:bg-primary-700 transition-colors hidden">
+                        Login to Checkout
                     </button>
                 </div>
             </div>
@@ -170,7 +176,7 @@
         <div class="bg-white rounded-lg shadow-2xl max-w-md w-full">
             <div class="p-6">
                 <div class="flex justify-between items-center mb-6">
-                    <h2 id="auth-modal-title" class="text-2xl font-bold text-gray-900">Login</h2>
+                    <h2 id="auth-modal-title" class="text-2xl font-bold text-gray-900">Login to CircuitCart</h2>
                     <button id="close-auth-modal" class="text-gray-500 hover:text-gray-700">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -181,22 +187,22 @@
                 <form id="auth-form" class="space-y-4">
                     <div id="name-fields" class="grid grid-cols-2 gap-4 hidden">
                         <div>
-                            <label for="first-name" class="block text-sm font-medium text-gray-700">First Name</label>
-                            <input type="text" id="first-name" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                            <label for="first-name" class="block text-sm font-medium text-gray-700">First Name *</label>
+                            <input type="text" id="first-name" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                         </div>
                         <div>
-                            <label for="last-name" class="block text-sm font-medium text-gray-700">Last Name</label>
-                            <input type="text" id="last-name" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                            <label for="last-name" class="block text-sm font-medium text-gray-700">Last Name *</label>
+                            <input type="text" id="last-name" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                         </div>
                     </div>
                     
                     <div>
-                        <label for="auth-email" class="block text-sm font-medium text-gray-700">Email</label>
+                        <label for="auth-email" class="block text-sm font-medium text-gray-700">Email *</label>
                         <input type="email" id="auth-email" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     </div>
 
                     <div>
-                        <label for="auth-password" class="block text-sm font-medium text-gray-700">Password</label>
+                        <label for="auth-password" class="block text-sm font-medium text-gray-700">Password *</label>
                         <input type="password" id="auth-password" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     </div>
 
@@ -312,6 +318,10 @@
             const discountForm = document.getElementById('discount-form');
             const discountCodeInput = document.getElementById('discount-code');
             const discountMessage = document.getElementById('discount-message');
+            const checkoutBtn = document.getElementById('checkout-btn');
+            const guestCheckoutBtn = document.getElementById('guest-checkout-btn');
+            const guestCartMessage = document.getElementById('guest-cart-message');
+            const loginFromCart = document.getElementById('login-from-cart');
 
             // Initialize
             checkAuthStatus();
@@ -338,6 +348,7 @@
                 sellerActions.classList.add('hidden');
                 adminBtn.classList.add('hidden');
                 sellerBtn.classList.add('hidden');
+                apiDocsBtn.classList.add('hidden');
             }
 
             function showUserMenu() {
@@ -351,18 +362,40 @@
             }
 
             function updateUIForUserRole() {
+                // Show/hide admin button
                 if (currentUser.role === 'admin') {
                     adminBtn.classList.remove('hidden');
                     sellerBtn.classList.remove('hidden');
                     sellerActions.classList.remove('hidden');
+                    apiDocsBtn.classList.remove('hidden');
                 } else if (currentUser.role === 'seller' && currentUser.is_approved) {
                     sellerBtn.classList.remove('hidden');
                     sellerActions.classList.remove('hidden');
                     adminBtn.classList.add('hidden');
+                    // Only show API Docs to admin and approved sellers
+                    apiDocsBtn.classList.remove('hidden');
                 } else {
                     adminBtn.classList.add('hidden');
                     sellerBtn.classList.add('hidden');
                     sellerActions.classList.add('hidden');
+                    apiDocsBtn.classList.add('hidden');
+                }
+
+                // Update checkout button based on authentication
+                updateCheckoutUI();
+            }
+
+            function updateCheckoutUI() {
+                if (currentUser) {
+                    checkoutBtn.classList.remove('hidden');
+                    guestCheckoutBtn.classList.add('hidden');
+                    guestCartMessage.classList.add('hidden');
+                } else {
+                    checkoutBtn.classList.add('hidden');
+                    guestCheckoutBtn.classList.remove('hidden');
+                    if (cart.length > 0) {
+                        guestCartMessage.classList.remove('hidden');
+                    }
                 }
             }
 
@@ -434,6 +467,7 @@
                 localStorage.removeItem('userData');
                 currentUser = null;
                 showAuthButtons();
+                updateCheckoutUI();
                 showMessage('Logged out successfully', 'success');
             }
 
@@ -460,21 +494,31 @@
             function closeAuthModalFunc() {
                 authModal.classList.add('hidden');
                 authForm.reset();
+                // Reset to login mode when closing
+                if (!isLoginMode) {
+                    switchAuthMode();
+                }
             }
 
             function switchAuthMode() {
                 isLoginMode = !isLoginMode;
                 
                 if (isLoginMode) {
-                    authModalTitle.textContent = 'Login';
+                    authModalTitle.textContent = 'Login to CircuitCart';
                     authSubmitBtn.textContent = 'Login';
                     authSwitchBtn.textContent = "Don't have an account? Register";
                     nameFields.classList.add('hidden');
+                    // Remove required from name fields
+                    firstName.required = false;
+                    lastName.required = false;
                 } else {
-                    authModalTitle.textContent = 'Register';
+                    authModalTitle.textContent = 'Create Account';
                     authSubmitBtn.textContent = 'Register';
                     authSwitchBtn.textContent = 'Already have an account? Login';
                     nameFields.classList.remove('hidden');
+                    // Add required to name fields
+                    firstName.required = true;
+                    lastName.required = true;
                 }
             }
 
@@ -549,9 +593,9 @@
             }
 
             function getStatusBadge(status) {
-                if (status === 'In Stock') return `<span class="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">In Stock</span>`;
-                if (status === 'Low Stock') return `<span class="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-1 rounded-full">Low Stock</span>`;
-                if (status === 'Out of Stock') return `<span class="inline-block bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded-full">Out of Stock</span>`;
+                if (status === 'In Stock') return '<span class="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">In Stock</span>';
+                if (status === 'Low Stock') return '<span class="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-1 rounded-full">Low Stock</span>';
+                if (status === 'Out of Stock') return '<span class="inline-block bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded-full">Out of Stock</span>';
                 return '';
             }
 
@@ -580,6 +624,13 @@
             }
             
             function addToCart() {
+                // Check if user is logged in
+                if (!currentUser) {
+                    showMessage('Please login to add items to cart', 'error');
+                    openAuthModal();
+                    return;
+                }
+
                 const productId = parseInt(modalAddToCartBtn.dataset.id);
                 const quantity = parseInt(modalQuantity.value);
                 const product = allProducts.find(p => p.product_id === productId);
@@ -626,6 +677,7 @@
                 cartItemsList.innerHTML = '';
                 if (cart.length === 0) {
                     cartItemsList.innerHTML = '<p class="text-gray-500">Your cart is empty.</p>';
+                    guestCartMessage.classList.add('hidden');
                 }
                 
                 let subtotal = 0;
@@ -663,6 +715,9 @@
                 
                 summarySubtotal.textContent = `$${subtotal.toFixed(2)}`;
                 summaryTotal.textContent = `$${total.toFixed(2)}`;
+
+                // Update checkout UI based on authentication
+                updateCheckoutUI();
             }
 
             function applyDiscount(e) {
@@ -718,6 +773,18 @@
             });
             
             logoutBtn.addEventListener('click', handleLogout);
+
+            loginFromCart.addEventListener('click', () => {
+                isLoginMode = true;
+                switchAuthMode();
+                openAuthModal();
+            });
+
+            guestCheckoutBtn.addEventListener('click', () => {
+                isLoginMode = true;
+                switchAuthMode();
+                openAuthModal();
+            });
             
             addProductBtn.addEventListener('click', () => {
                 window.location.href = '/admin';
@@ -741,6 +808,10 @@
                 } else {
                     const firstNameVal = firstName.value;
                     const lastNameVal = lastName.value;
+                    if (!firstNameVal || !lastNameVal) {
+                        showMessage('Please enter your first and last name', 'error');
+                        return;
+                    }
                     await handleRegister(email, password, firstNameVal, lastNameVal);
                 }
             });
@@ -771,6 +842,16 @@
             });
             
             discountForm.addEventListener('submit', applyDiscount);
+
+            checkoutBtn.addEventListener('click', () => {
+                if (currentUser) {
+                    showMessage('Proceeding to checkout...', 'success');
+                    // Here you would integrate with your payment system
+                } else {
+                    showMessage('Please login to checkout', 'error');
+                    openAuthModal();
+                }
+            });
         });
     </script>
 </body>

@@ -523,7 +523,21 @@ def serve_api_docs():
     return send_from_directory('.', 'api-docs.html')
 
 @app.route('/swagger')
+@jwt_required()
 def serve_swagger():
+    """Serve Swagger UI only to authenticated users"""
+    current_user_id = get_jwt_identity()
+    
+    # Check if user is admin or approved seller
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT role, is_approved FROM users WHERE user_id = %s", (current_user_id,))
+    user = cursor.fetchone()
+    cursor.close()
+    
+    if not user or (user[0] not in ['admin', 'seller']) or (user[0] == 'seller' and not user[1]):
+        return jsonify({"error": "Access denied. Admin or approved seller required."}), 403
+    
     return send_from_directory('.', 'swagger.html')
 
 # Serve static files
