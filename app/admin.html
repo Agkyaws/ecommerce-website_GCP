@@ -14,11 +14,11 @@
                 <button id="back-to-shop" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
                     Back to Shop
                 </button>
-                <button id="add-product-btn" class="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
-                    Add New Product
-                </button>
-                <button id="api-docs-btn" class="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors">
+                <button id="swagger-btn" class="bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
                     API Docs
+                </button>
+                <button id="logout-btn" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">
+                    Logout
                 </button>
             </div>
         </nav>
@@ -42,7 +42,7 @@
                             <th class="px-4 py-2 text-left">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="admin-users-table">
+                    <tbody id="users-table">
                         <!-- Users will be loaded here -->
                     </tbody>
                 </table>
@@ -102,85 +102,29 @@
         </div>
     </main>
 
-    <!-- Add/Edit Product Modal -->
-    <div id="product-form-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-90vh overflow-y-auto">
+    <!-- Role Update Modal -->
+    <div id="role-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-2xl max-w-md w-full">
             <div class="p-6">
-                <h2 id="modal-title" class="text-2xl font-bold text-gray-900 mb-6">Add New Product</h2>
+                <h2 id="role-modal-title" class="text-2xl font-bold text-gray-900 mb-6">Update User Role</h2>
                 
-                <form id="product-form" class="space-y-4">
-                    <input type="hidden" id="product-id">
+                <form id="role-form" class="space-y-4">
+                    <input type="hidden" id="role-user-id">
                     
                     <div>
-                        <label for="product-name" class="block text-sm font-medium text-gray-700">Product Name *</label>
-                        <input type="text" id="product-name" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-
-                    <div>
-                        <label for="product-description" class="block text-sm font-medium text-gray-700">Description</label>
-                        <textarea id="product-description" rows="3" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label for="product-price" class="block text-sm font-medium text-gray-700">Price ($) *</label>
-                            <input type="number" id="product-price" step="0.01" min="0" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                        <div>
-                            <label for="product-category" class="block text-sm font-medium text-gray-700">Category *</label>
-                            <select id="product-category" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="">Select Category</option>
-                                <option value="Electronics">Electronics</option>
-                                <option value="Homeware">Homeware</option>
-                                <option value="Apparel">Apparel</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Image Upload Section -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Product Image</label>
-                        
-                        <!-- Image Preview -->
-                        <div id="image-preview" class="mt-2 hidden">
-                            <img id="preview-image" src="" alt="Preview" class="w-32 h-32 object-cover rounded-lg border">
-                            <p id="image-name" class="text-sm text-gray-500 mt-1"></p>
-                        </div>
-
-                        <!-- Upload Controls -->
-                        <div class="mt-2 flex items-center gap-4">
-                            <label for="image-upload" class="cursor-pointer bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                                Choose Image
-                            </label>
-                            <input type="file" id="image-upload" accept="image/*" class="hidden">
-                            <button type="button" id="remove-image" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors hidden">
-                                Remove
-                            </button>
-                        </div>
-                        
-                        <!-- Upload Progress -->
-                        <div id="upload-progress" class="mt-2 hidden">
-                            <div class="w-full bg-gray-200 rounded-full h-2.5">
-                                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-                            </div>
-                            <p id="progress-text" class="text-sm text-gray-600 mt-1">Uploading...</p>
-                        </div>
-
-                        <p class="text-xs text-gray-500 mt-1">
-                            Supported formats: PNG, JPG, JPEG, GIF, WEBP. Max size: 16MB
-                        </p>
-                    </div>
-
-                    <div>
-                        <label for="product-quantity" class="block text-sm font-medium text-gray-700">Initial Stock Quantity *</label>
-                        <input type="number" id="product-quantity" min="0" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <label for="user-role-select" class="block text-sm font-medium text-gray-700">Role</label>
+                        <select id="user-role-select" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="user">User</option>
+                            <option value="seller">Seller</option>
+                            <option value="admin">Admin</option>
+                        </select>
                     </div>
 
                     <div class="flex gap-4 pt-4">
-                        <button type="submit" id="save-product-btn" class="flex-grow bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                            Save Product
+                        <button type="submit" class="flex-grow bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                            Update Role
                         </button>
-                        <button type="button" id="cancel-product-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
+                        <button type="button" id="cancel-role-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
                             Cancel
                         </button>
                     </div>
@@ -194,61 +138,81 @@
             console.log('Admin dashboard loaded.');
 
             const backToShopBtn = document.getElementById('back-to-shop');
-            const addProductBtn = document.getElementById('add-product-btn');
-            const apiDocsBtn = document.getElementById('api-docs-btn');
+            const swaggerBtn = document.getElementById('swagger-btn');
+            const logoutBtn = document.getElementById('logout-btn');
             const adminSearch = document.getElementById('admin-search');
             const categoryFilter = document.getElementById('category-filter');
             const productsTable = document.getElementById('admin-products-table');
-            const usersTable = document.getElementById('admin-users-table');
-            const productFormModal = document.getElementById('product-form-modal');
-            const productForm = document.getElementById('product-form');
-            const modalTitle = document.getElementById('modal-title');
-            const cancelProductBtn = document.getElementById('cancel-product-btn');
+            const usersTable = document.getElementById('users-table');
             const totalProductsEl = document.getElementById('total-products');
             const lowStockCountEl = document.getElementById('low-stock-count');
             const outOfStockCountEl = document.getElementById('out-of-stock-count');
             
-            // Image upload elements
-            const imageUpload = document.getElementById('image-upload');
-            const imagePreview = document.getElementById('image-preview');
-            const previewImage = document.getElementById('preview-image');
-            const imageName = document.getElementById('image-name');
-            const removeImageBtn = document.getElementById('remove-image');
-            const uploadProgress = document.getElementById('upload-progress');
-            const progressBar = document.getElementById('progress-bar');
-            const progressText = document.getElementById('progress-text');
+            // Role modal elements
+            const roleModal = document.getElementById('role-modal');
+            const roleForm = document.getElementById('role-form');
+            const roleUserId = document.getElementById('role-user-id');
+            const userRoleSelect = document.getElementById('user-role-select');
+            const cancelRoleBtn = document.getElementById('cancel-role-btn');
 
             let allProducts = [];
             let allUsers = [];
-            let editingProductId = null;
-            let currentImageUrl = '';
 
             // Navigation
             backToShopBtn.addEventListener('click', () => {
                 window.location.href = '/';
             });
 
-            apiDocsBtn.addEventListener('click', () => {
-                window.location.href = '/api-docs';
+            swaggerBtn.addEventListener('click', () => {
+                window.location.href = '/swagger-ui';
             });
 
-            addProductBtn.addEventListener('click', () => {
-                openProductModal();
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    await fetch('/api/auth/logout', { method: 'POST' });
+                    window.location.href = '/';
+                } catch (error) {
+                    console.error('Logout failed:', error);
+                }
             });
-
-            cancelProductBtn.addEventListener('click', () => {
-                closeProductModal();
-            });
-
-            // Image upload handling
-            imageUpload.addEventListener('change', handleImageUpload);
-            removeImageBtn.addEventListener('click', removeImage);
 
             // Search and filter
             adminSearch.addEventListener('input', filterProducts);
             categoryFilter.addEventListener('change', filterProducts);
 
-            // Load products and users
+            // Role modal
+            cancelRoleBtn.addEventListener('click', () => {
+                roleModal.classList.add('hidden');
+            });
+
+            roleForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const userId = parseInt(roleUserId.value);
+                const role = userRoleSelect.value;
+
+                try {
+                    const response = await fetch(`/api/admin/users/${userId}/role`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ role })
+                    });
+
+                    if (response.ok) {
+                        roleModal.classList.add('hidden');
+                        await loadUsers();
+                    } else {
+                        const error = await response.json();
+                        alert('Failed to update role: ' + error.error);
+                    }
+                } catch (error) {
+                    console.error('Error updating role:', error);
+                    alert('Error updating role');
+                }
+            });
+
+            // Load data
             loadAdminProducts();
             loadUsers();
 
@@ -277,62 +241,6 @@
                     console.error('Error loading users:', error);
                     usersTable.innerHTML = '<tr><td colspan="6" class="px-4 py-2 text-center text-red-500">Error loading users</td></tr>';
                 }
-            }
-
-            function renderUsersTable(users) {
-                usersTable.innerHTML = '';
-                
-                if (users.length === 0) {
-                    usersTable.innerHTML = '<tr><td colspan="6" class="px-4 py-2 text-center text-gray-500">No users found</td></tr>';
-                    return;
-                }
-
-                users.forEach(user => {
-                    const row = document.createElement('tr');
-                    row.className = 'border-b hover:bg-gray-50';
-                    row.innerHTML = `
-                        <td class="px-4 py-2 font-semibold">${user.username}</td>
-                        <td class="px-4 py-2">${user.email}</td>
-                        <td class="px-4 py-2">
-                            <select class="user-role-select border rounded px-2 py-1" data-user-id="${user.user_id}">
-                                <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
-                                <option value="seller" ${user.role === 'seller' ? 'selected' : ''}>Seller</option>
-                                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
-                            </select>
-                        </td>
-                        <td class="px-4 py-2">
-                            ${user.approved ? 
-                                '<span class="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">Approved</span>' : 
-                                '<span class="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-1 rounded-full">Pending</span>'
-                            }
-                        </td>
-                        <td class="px-4 py-2">${new Date(user.created_at).toLocaleDateString()}</td>
-                        <td class="px-4 py-2">
-                            ${!user.approved ? `
-                                <button class="approve-user-btn bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 mr-2" data-user-id="${user.user_id}">
-                                    Approve
-                                </button>
-                            ` : ''}
-                        </td>
-                    `;
-                    usersTable.appendChild(row);
-                });
-
-                // Add event listeners to user management buttons
-                document.querySelectorAll('.approve-user-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        const userId = e.target.dataset.userId;
-                        approveUser(userId);
-                    });
-                });
-
-                document.querySelectorAll('.user-role-select').forEach(select => {
-                    select.addEventListener('change', (e) => {
-                        const userId = e.target.dataset.userId;
-                        const newRole = e.target.value;
-                        updateUserRole(userId, newRole);
-                    });
-                });
             }
 
             function renderProductsTable(products) {
@@ -385,6 +293,71 @@
                 });
             }
 
+            function renderUsersTable(users) {
+                usersTable.innerHTML = '';
+                
+                if (users.length === 0) {
+                    usersTable.innerHTML = '<tr><td colspan="6" class="px-4 py-2 text-center text-gray-500">No users found</td></tr>';
+                    return;
+                }
+
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b hover:bg-gray-50';
+                    row.innerHTML = `
+                        <td class="px-4 py-2 font-semibold">${user.username}</td>
+                        <td class="px-4 py-2">${user.email}</td>
+                        <td class="px-4 py-2">
+                            <span class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded-full">${user.role}</span>
+                        </td>
+                        <td class="px-4 py-2">
+                            ${user.approved ? 
+                                '<span class="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">Approved</span>' :
+                                '<span class="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-1 rounded-full">Pending</span>'
+                            }
+                        </td>
+                        <td class="px-4 py-2 text-sm text-gray-500">${new Date(user.created_at).toLocaleDateString()}</td>
+                        <td class="px-4 py-2">
+                            ${!user.approved ? `
+                                <button class="approve-user-btn bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 mr-2" data-id="${user.user_id}">
+                                    Approve
+                                </button>
+                            ` : ''}
+                            <button class="update-role-btn bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 mr-2" data-id="${user.user_id}" data-role="${user.role}">
+                                Role
+                            </button>
+                            <button class="delete-user-btn bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600" data-id="${user.user_id}">
+                                Delete
+                            </button>
+                        </td>
+                    `;
+                    usersTable.appendChild(row);
+                });
+
+                // Add event listeners to user buttons
+                document.querySelectorAll('.approve-user-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const userId = e.target.dataset.id;
+                        approveUser(userId);
+                    });
+                });
+
+                document.querySelectorAll('.update-role-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const userId = e.target.dataset.id;
+                        const currentRole = e.target.dataset.role;
+                        openRoleModal(userId, currentRole);
+                    });
+                });
+
+                document.querySelectorAll('.delete-user-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const userId = e.target.dataset.id;
+                        deleteUser(userId);
+                    });
+                });
+            }
+
             function getStatusBadge(status) {
                 if (status === 'In Stock') return '<span class="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">In Stock</span>';
                 if (status === 'Low Stock') return '<span class="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-1 rounded-full">Low Stock</span>';
@@ -416,10 +389,16 @@
                 outOfStockCountEl.textContent = outOfStock;
             }
 
+            function openRoleModal(userId, currentRole) {
+                roleUserId.value = userId;
+                userRoleSelect.value = currentRole;
+                roleModal.classList.remove('hidden');
+            }
+
             async function approveUser(userId) {
                 try {
                     const response = await fetch(`/api/admin/users/${userId}/approve`, {
-                        method: 'POST'
+                        method: 'PUT'
                     });
 
                     if (response.ok) {
@@ -433,153 +412,35 @@
                 }
             }
 
-            async function updateUserRole(userId, newRole) {
-                try {
-                    const response = await fetch(`/api/admin/users/${userId}/role`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ role: newRole })
-                    });
-
-                    if (!response.ok) {
-                        alert('Failed to update user role');
-                        // Reload to reset the select
-                        await loadUsers();
-                    }
-                } catch (error) {
-                    console.error('Error updating user role:', error);
-                    alert('Error updating user role');
-                    await loadUsers();
-                }
-            }
-
-            function openProductModal(product = null) {
-                editingProductId = product ? product.product_id : null;
-                currentImageUrl = product ? product.image_url : '';
-                
-                if (product) {
-                    modalTitle.textContent = 'Edit Product';
-                    document.getElementById('product-id').value = product.product_id;
-                    document.getElementById('product-name').value = product.name;
-                    document.getElementById('product-description').value = product.description;
-                    document.getElementById('product-price').value = product.price;
-                    document.getElementById('product-category').value = product.category;
-                    document.getElementById('product-quantity').value = product.quantity;
-                    
-                    // Show existing image
-                    if (product.image_url) {
-                        previewImage.src = product.image_url;
-                        imageName.textContent = 'Current image';
-                        imagePreview.classList.remove('hidden');
-                        removeImageBtn.classList.remove('hidden');
-                    }
-                } else {
-                    modalTitle.textContent = 'Add New Product';
-                    productForm.reset();
-                    resetImageUpload();
-                }
-                
-                productFormModal.classList.remove('hidden');
-            }
-
-            function closeProductModal() {
-                productFormModal.classList.add('hidden');
-                editingProductId = null;
-                currentImageUrl = '';
-                productForm.reset();
-                resetImageUpload();
-            }
-
-            function resetImageUpload() {
-                imagePreview.classList.add('hidden');
-                removeImageBtn.classList.add('hidden');
-                uploadProgress.classList.add('hidden');
-                progressBar.style.width = '0%';
-                imageUpload.value = '';
-                currentImageUrl = '';
-            }
-
-            function removeImage() {
-                resetImageUpload();
-            }
-
-            async function handleImageUpload(event) {
-                const file = event.target.files[0];
-                if (!file) return;
-
-                // Validate file type and size
-                const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-                if (!validTypes.includes(file.type)) {
-                    alert('Please select a valid image file (JPEG, PNG, GIF, or WEBP)');
-                    resetImageUpload();
+            async function deleteUser(userId) {
+                if (!confirm('Are you sure you want to delete this user?')) {
                     return;
                 }
 
-                if (file.size > 16 * 1024 * 1024) {
-                    alert('File size must be less than 16MB');
-                    resetImageUpload();
-                    return;
-                }
-
-                // Show preview
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    previewImage.src = e.target.result;
-                    imageName.textContent = file.name;
-                    imagePreview.classList.remove('hidden');
-                    removeImageBtn.classList.remove('hidden');
-                };
-                reader.readAsDataURL(file);
-
-                // Upload to server
-                await uploadImage(file);
-            }
-
-            async function uploadImage(file) {
-                const formData = new FormData();
-                formData.append('image', file);
-
                 try {
-                    uploadProgress.classList.remove('hidden');
-                    progressBar.style.width = '30%';
-                    progressText.textContent = 'Uploading...';
-
-                    const response = await fetch('/api/admin/upload', {
-                        method: 'POST',
-                        body: formData
+                    const response = await fetch(`/api/admin/users/${userId}`, {
+                        method: 'DELETE'
                     });
-
-                    progressBar.style.width = '100%';
 
                     if (response.ok) {
-                        const result = await response.json();
-                        currentImageUrl = result.image_url;
-                        progressText.textContent = 'Upload complete!';
-                        
-                        // Hide progress after a delay
-                        setTimeout(() => {
-                            uploadProgress.classList.add('hidden');
-                        }, 1000);
+                        await loadUsers();
                     } else {
                         const error = await response.json();
-                        throw new Error(error.error || 'Upload failed');
+                        alert('Failed to delete user: ' + error.error);
                     }
                 } catch (error) {
-                    console.error('Upload error:', error);
-                    progressText.textContent = 'Upload failed';
-                    progressBar.style.backgroundColor = '#dc2626';
-                    alert('Image upload failed: ' + error.message);
-                    
-                    resetImageUpload();
+                    console.error('Error deleting user:', error);
+                    alert('Error deleting user');
                 }
             }
 
             async function editProduct(productId) {
                 const product = allProducts.find(p => p.product_id === parseInt(productId));
                 if (product) {
-                    openProductModal(product);
+                    // Redirect to main page for editing (since modal is there now)
+                    window.location.href = '/';
+                    // Note: In a real implementation, you might want to pass the product ID
+                    // and automatically open the modal on the main page
                 }
             }
 
@@ -603,57 +464,6 @@
                     alert('Error deleting product');
                 }
             }
-
-            // Handle form submission
-            productForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                const formData = {
-                    name: document.getElementById('product-name').value,
-                    description: document.getElementById('product-description').value,
-                    price: parseFloat(document.getElementById('product-price').value),
-                    category: document.getElementById('product-category').value,
-                    quantity: parseInt(document.getElementById('product-quantity').value)
-                };
-
-                // Use uploaded image URL if available, otherwise keep existing one for edits
-                if (currentImageUrl) {
-                    formData.image_url = currentImageUrl;
-                } else if (editingProductId) {
-                    // For edits, if no new image uploaded, keep the existing one
-                    const existingProduct = allProducts.find(p => p.product_id === editingProductId);
-                    formData.image_url = existingProduct ? existingProduct.image_url : '/static/default.png';
-                } else {
-                    formData.image_url = '/static/default.png';
-                }
-
-                try {
-                    const url = editingProductId ? 
-                        `/api/admin/products/${editingProductId}` : 
-                        '/api/admin/products';
-                    
-                    const method = editingProductId ? 'PUT' : 'POST';
-
-                    const response = await fetch(url, {
-                        method: method,
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(formData)
-                    });
-
-                    if (response.ok) {
-                        closeProductModal();
-                        await loadAdminProducts();
-                    } else {
-                        const error = await response.json();
-                        alert('Failed to save product: ' + (error.error || 'Unknown error'));
-                    }
-                } catch (error) {
-                    console.error('Error saving product:', error);
-                    alert('Error saving product: ' + error.message);
-                }
-            });
         });
     </script>
 </body>

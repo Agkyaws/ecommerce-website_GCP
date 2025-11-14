@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - CircuitCart</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <nav class="container max-w-7xl mx-auto p-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">API Documentation</h1>
+            <div class="flex gap-4">
+                <button id="back-to-shop" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                    Back to Shop
+                </button>
+                <button id="back-to-admin" class="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                    Admin Dashboard
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container max-w-7xl mx-auto p-4 sm:p-8">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Interactive API Documentation</h2>
+            <p class="text-gray-600 mb-6">
+                Use the interactive Swagger UI below to explore and test the API endpoints.
+                Note: Some endpoints require authentication.
+            </p>
+            
+            <!-- Swagger UI Container -->
+            <div id="swagger-ui" class="w-full" style="height: 800px;"></div>
+        </div>
+    </main>
+
+    <!-- Load Swagger UI -->
+    <script src="https://unpkg.com/swagger-ui-dist@3/swagger-ui-bundle.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@3/swagger-ui.css" />
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Navigation
+            document.getElementById('back-to-shop').addEventListener('click', () => {
+                window.location.href = '/';
+            });
+            
+            document.getElementById('back-to-admin').addEventListener('click', () => {
+                window.location.href = '/admin';
+            });
+
+            // Initialize Swagger UI
+            const ui = SwaggerUIBundle({
+                url: '/swagger.json',
+                dom_id: '#swagger-ui',
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.presets.standalone
+                ],
+                layout: "BaseLayout",
+                deepLinking: true,
+                showExtensions: true,
+                showCommonExtensions: true
+            });
+        });
+    </script>
+</body>
+</html>
