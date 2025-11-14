@@ -1,0 +1,71 @@
+# This pipeline is triggered by pushes to the 'main' branch
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+- group: gcp-secrets
+- name: GCP_PROJECT_ID
+  value: 'tranquil-leaf-472813-v8'
+- name: GCP_REGION
+  value: 'us-central1'
+- name: GCP_SERVICE_NAME
+  value: 'shop-app'
+- name: DOCKER_REGISTRY_PATH
+  value: 'us-central1-docker.pkg.dev/tranquil-leaf-472813-v8/shop-app-repo'
+- name: IMAGE_NAME
+  value: 'shop-app'
+- name: IMAGE_TAG
+  value: '$(Build.BuildId)'
+
+stages:
+- stage: Build_and_Deploy
+  displayName: Build and Deploy to Cloud Run
+  jobs:
+  - job: Deploy
+    displayName: Build, Push, and Deploy
+    steps:
+    
+    # 1. Write the raw SA Key to a temporary file
+    - script: |
+        echo '$(GCP_SA_KEY)' > $(Agent.TempDirectory)/gcp-key.json
+      displayName: '1. Write SA Key (Raw JSON)'
+
+    # 2. Activate the Service Account
+    - script: |
+        gcloud auth activate-service-account --key-file=$(Agent.TempDirectory)/gcp-key.json --project=$(GCP_PROJECT_ID)
+      displayName: '2. Activate Service Account'
+      
+    # 3. Configure Docker for Artifact Registry
+    - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
+      displayName: '3. Configure Docker for Artifact Registry'
+      
+    # 4. Build the Docker Image
+    - script: |
+        cd app
+        docker build -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest .
+      displayName: '4. Build Docker Image'
+      
+    # 5. Push the Docker Image
+    - script: |
+        docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG)
+        docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
+      displayName: '5. Push Docker Image'
+          
+    # 6. Deploy to Cloud Run (ONLY SET NON-DATABASE VARIABLES)
+    - script: |
+        gcloud run deploy $(GCP_SERVICE_NAME) \
+          --image=$(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) \
+          --region=$(GCP_REGION) \
+          --project=$(GCP_PROJECT_ID) \
+          --platform=managed \
+          --allow-unauthenticated \
+          --timeout=600 \
+          --cpu=1 \
+          --memory=1Gi \
+          --set-env-vars="JWT_SECRET_KEY=$(JWT_SECRET_KEY)"
+      displayName: '6. Deploy to Cloud Run'
