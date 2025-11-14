@@ -1,16 +1,20 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from flask import Flask, jsonify, g, send_from_directory, request, session
-from flask_swagger_ui import get_swaggerui_blueprint
+from flask import Flask, jsonify, g, send_from_directory, request, redirect, url_for
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import time
 import uuid
 from werkzeug.utils import secure_filename
-import bcrypt
-from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'serve_index'
 
 # Image upload configuration
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
@@ -25,6 +29,46 @@ def ensure_upload_folder():
     """Ensure the upload folder exists"""
     if not os.path.exists(app.config['UPLOAD_FOLDER']):
         os.makedirs(app.config['UPLOAD_FOLDER'])
+
+# User class for Flask-Login
+class User(UserMixin):
+    def __init__(self, user_id, username, email, role, approved):
+        self.id = user_id
+        self.username = username
+        self.email = email
+        self.role = role
+        self.approved = approved
+
+    def is_admin(self):
+        return self.role == 'admin' and self.approved
+    
+    def is_seller(self):
+        return self.role == 'seller' and self.approved
+    
+    def is_user(self):
+        return self.role == 'user' and self.approved
+
+@login_manager.user_loader
+def load_user(user_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+        user_data = cursor.fetchone()
+        cursor.close()
+        
+        if user_data:
+            return User(
+                user_id=user_data['user_id'],
+                username=user_data['username'],
+                email=user_data['email'],
+                role=user_data['role'],
+                approved=user_data['approved']
+            )
+        return None
+    except Exception as e:
+        print(f"Error loading user: {e}")
+        return None
 
 # --- Database Connection ---
 
@@ -74,7 +118,7 @@ def init_database():
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'user',
-            approved BOOLEAN NOT NULL DEFAULT FALSE,
+            approved BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         ''')
@@ -88,8 +132,7 @@ def init_database():
             price REAL,
             category TEXT,
             image_url TEXT,
-            created_by INTEGER REFERENCES users(user_id),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_by INTEGER REFERENCES users(user_id)
         )
         ''')
         
@@ -102,20 +145,31 @@ def init_database():
         )
         ''')
 
-        # Check if users table is empty, create admin user
+        # Check if users table is empty and create admin user
         cursor.execute("SELECT COUNT(*) FROM users")
         user_count = cursor.fetchone()[0]
         
         if user_count == 0:
             print("👤 Creating admin user...")
-            # Create default admin user (password: admin123)
-            admin_password = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            cursor.execute(
-                "INSERT INTO users (username, email, password_hash, role, approved) VALUES (%s, %s, %s, %s, %s)",
-                ('admin', 'admin@shop.com', admin_password, 'admin', True)
-            )
-            conn.commit()
-            print("✅ Admin user created (username: admin, password: admin123)")
+            admin_password_hash = generate_password_hash('admin123')
+            cursor.execute("""
+                INSERT INTO users (username, email, password_hash, role, approved) 
+                VALUES (%s, %s, %s, %s, %s)
+            """, ('admin', 'admin@shop.com', admin_password_hash, 'admin', True))
+            
+            # Create sample seller and user
+            seller_password_hash = generate_password_hash('seller123')
+            user_password_hash = generate_password_hash('user123')
+            
+            cursor.execute("""
+                INSERT INTO users (username, email, password_hash, role, approved) 
+                VALUES (%s, %s, %s, %s, %s)
+            """, ('seller1', 'seller@shop.com', seller_password_hash, 'seller', True))
+            
+            cursor.execute("""
+                INSERT INTO users (username, email, password_hash, role, approved) 
+                VALUES (%s, %s, %s, %s, %s)
+            """, ('user1', 'user@shop.com', user_password_hash, 'user', True))
 
         # Check if products table is empty
         cursor.execute("SELECT COUNT(*) FROM products")
@@ -132,7 +186,10 @@ def init_database():
                 ('Running Shoes', 'Lightweight and breathable. Perfect for road running.', 89.99, 'Apparel', '/static/p5.png', 1)
             ]
             
-            cursor.executemany("INSERT INTO products (name, description, price, category, image_url, created_by) VALUES (%s, %s, %s, %s, %s, %s)", products_data)
+            cursor.executemany("""
+                INSERT INTO products (name, description, price, category, image_url, created_by) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, products_data)
             
             # Get the new product IDs
             cursor.execute("SELECT product_id FROM products ORDER BY product_id ASC;")
@@ -166,108 +223,6 @@ with app.app_context():
     except Exception as e:
         print(f"❌ Initial setup failed: {e}")
 
-# --- Authentication Decorators ---
-
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({"error": "Login required"}), 401
-        return f(*args, **kwargs)
-    return decorated_function
-
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({"error": "Login required"}), 401
-        if session.get('role') != 'admin':
-            return jsonify({"error": "Admin access required"}), 403
-        return f(*args, **kwargs)
-    return decorated_function
-
-def seller_or_admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({"error": "Login required"}), 401
-        if session.get('role') not in ['seller', 'admin']:
-            return jsonify({"error": "Seller or admin access required"}), 403
-        return f(*args, **kwargs)
-    return decorated_function
-
-# --- Swagger UI Setup ---
-SWAGGER_URL = '/swagger'
-API_URL = '/swagger.json'
-
-swaggerui_blueprint = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
-    config={
-        'app_name': "E-Commerce API"
-    }
-)
-
-app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
-
-@app.route('/swagger.json')
-def swagger_spec():
-    return jsonify({
-        "openapi": "3.0.0",
-        "info": {
-            "title": "E-Commerce API",
-            "version": "1.0.0",
-            "description": "API for E-Commerce Application"
-        },
-        "paths": {
-            "/api/products": {
-                "get": {
-                    "summary": "Get products",
-                    "parameters": [
-                        {
-                            "name": "search",
-                            "in": "query",
-                            "required": False,
-                            "schema": {"type": "string"}
-                        },
-                        {
-                            "name": "admin",
-                            "in": "query",
-                            "required": False,
-                            "schema": {"type": "boolean"}
-                        }
-                    ],
-                    "responses": {
-                        "200": {"description": "List of products"}
-                    }
-                }
-            },
-            "/api/auth/login": {
-                "post": {
-                    "summary": "User login",
-                    "requestBody": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "username": {"type": "string"},
-                                        "password": {"type": "string"}
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "responses": {
-                        "200": {"description": "Login successful"},
-                        "401": {"description": "Invalid credentials"}
-                    }
-                }
-            }
-            # Add more API endpoints as needed
-        }
-    })
-
 # Health check endpoint
 @app.route('/health')
 def health_check():
@@ -294,12 +249,18 @@ def serve_index():
     return send_from_directory('.', 'index.html')
 
 @app.route('/admin')
+@login_required
 def serve_admin():
+    if not current_user.is_admin():
+        return redirect(url_for('serve_index'))
     return send_from_directory('.', 'admin.html')
 
-@app.route('/swagger-ui')
-def serve_swagger_ui():
-    return send_from_directory('.', 'swagger.html')
+@app.route('/api-docs')
+@login_required
+def serve_api_docs():
+    if not current_user.is_admin():
+        return redirect(url_for('serve_index'))
+    return send_from_directory('.', 'api-docs.html')
 
 # Serve static files
 @app.route('/static/<path:filename>')
@@ -307,117 +268,131 @@ def serve_static(filename):
     return send_from_directory('static', filename)
 
 # --- Authentication Endpoints ---
-@app.route('/api/auth/register', methods=['POST'])
+@app.route('/api/register', methods=['POST'])
 def register():
     try:
         data = request.get_json()
-        username = data.get('username')
-        email = data.get('email')
-        password = data.get('password')
-        role = data.get('role', 'user')
-
-        if not username or not email or not password:
+        
+        if not data or not all(k in data for k in ['username', 'email', 'password']):
             return jsonify({"error": "Missing required fields"}), 400
-
+        
+        username = data['username']
+        email = data['email']
+        password = data['password']
+        role = data.get('role', 'user')  # Default role is 'user'
+        
         conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-
-        # Check if user exists
+        cursor = conn.cursor()
+        
+        # Check if username or email already exists
         cursor.execute("SELECT user_id FROM users WHERE username = %s OR email = %s", (username, email))
         if cursor.fetchone():
-            return jsonify({"error": "User already exists"}), 400
-
-        # Hash password
-        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-        # Insert user (new users need admin approval)
-        approved = role == 'user'  # Auto-approve users, sellers need approval
-        cursor.execute(
-            "INSERT INTO users (username, email, password_hash, role, approved) VALUES (%s, %s, %s, %s, %s) RETURNING user_id",
-            (username, email, password_hash, role, approved)
-        )
-        user_id = cursor.fetchone()['user_id']
+            cursor.close()
+            return jsonify({"error": "Username or email already exists"}), 400
+        
+        # Hash password and create user
+        password_hash = generate_password_hash(password)
+        
+        # New users (except admin) need approval
+        approved = False
+        if role == 'user':
+            approved = True  # Regular users are auto-approved
+        
+        cursor.execute("""
+            INSERT INTO users (username, email, password_hash, role, approved) 
+            VALUES (%s, %s, %s, %s, %s) RETURNING user_id
+        """, (username, email, password_hash, role, approved))
+        
+        user_id = cursor.fetchone()[0]
         conn.commit()
         cursor.close()
-
+        
         return jsonify({
-            "message": "User registered successfully" + (" waiting for admin approval" if not approved else ""),
+            "message": "User registered successfully", 
             "user_id": user_id,
-            "approved": approved
+            "needs_approval": not approved
         }), 201
-
+        
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/auth/login', methods=['POST'])
+@app.route('/api/login', methods=['POST'])
 def login():
     try:
         data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
-
-        if not username or not password:
+        
+        if not data or not all(k in data for k in ['username', 'password']):
             return jsonify({"error": "Missing username or password"}), 400
-
+        
+        username = data['username']
+        password = data['password']
+        
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-
+        
         cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-        user = cursor.fetchone()
+        user_data = cursor.fetchone()
         cursor.close()
-
-        if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
-            if not user['approved']:
-                return jsonify({"error": "Account pending admin approval"}), 403
-
-            # Set session
-            session['user_id'] = user['user_id']
-            session['username'] = user['username']
-            session['role'] = user['role']
-            session['email'] = user['email']
-
+        
+        if user_data and check_password_hash(user_data['password_hash'], password):
+            if not user_data['approved']:
+                return jsonify({"error": "Account pending approval"}), 403
+                
+            user = User(
+                user_id=user_data['user_id'],
+                username=user_data['username'],
+                email=user_data['email'],
+                role=user_data['role'],
+                approved=user_data['approved']
+            )
+            login_user(user)
             return jsonify({
                 "message": "Login successful",
                 "user": {
-                    "user_id": user['user_id'],
-                    "username": user['username'],
-                    "email": user['email'],
-                    "role": user['role']
+                    "user_id": user_data['user_id'],
+                    "username": user_data['username'],
+                    "email": user_data['email'],
+                    "role": user_data['role']
                 }
             }), 200
         else:
-            return jsonify({"error": "Invalid credentials"}), 401
-
+            return jsonify({"error": "Invalid username or password"}), 401
+            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/auth/logout', methods=['POST'])
+@app.route('/api/logout', methods=['POST'])
+@login_required
 def logout():
-    session.clear()
+    logout_user()
     return jsonify({"message": "Logout successful"}), 200
 
-@app.route('/api/auth/me')
+@app.route('/api/user')
+@login_required
 def get_current_user():
-    if 'user_id' in session:
-        return jsonify({
-            "user_id": session['user_id'],
-            "username": session['username'],
-            "email": session['email'],
-            "role": session['role']
-        }), 200
-    else:
-        return jsonify({"error": "Not logged in"}), 401
+    return jsonify({
+        "user_id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role
+    }), 200
 
-# --- User Management Endpoints ---
+# --- User Management Endpoints (Admin only) ---
 @app.route('/api/admin/users', methods=['GET'])
-@admin_required
+@login_required
 def get_users():
+    if not current_user.is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
-        cursor.execute("SELECT user_id, username, email, role, approved, created_at FROM users ORDER BY created_at DESC")
+        cursor.execute("""
+            SELECT user_id, username, email, role, approved, created_at 
+            FROM users ORDER BY created_at DESC
+        """)
         users = cursor.fetchall()
         cursor.close()
         
@@ -425,9 +400,12 @@ def get_users():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/admin/users/<int:user_id>/approve', methods=['PUT'])
-@admin_required
+@app.route('/api/admin/users/<int:user_id>/approve', methods=['POST'])
+@login_required
 def approve_user(user_id):
+    if not current_user.is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -442,35 +420,41 @@ def approve_user(user_id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/users/<int:user_id>/role', methods=['PUT'])
-@admin_required
+@login_required
 def update_user_role(user_id):
+    if not current_user.is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    
     try:
         data = request.get_json()
-        role = data.get('role')
+        new_role = data.get('role')
         
-        if role not in ['user', 'seller', 'admin']:
+        if new_role not in ['user', 'seller', 'admin']:
             return jsonify({"error": "Invalid role"}), 400
-
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("UPDATE users SET role = %s WHERE user_id = %s", (role, user_id))
+        cursor.execute("UPDATE users SET role = %s WHERE user_id = %s", (new_role, user_id))
         conn.commit()
         cursor.close()
         
-        return jsonify({"message": f"User role updated to {role}"}), 200
+        return jsonify({"message": "User role updated successfully"}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
-@admin_required
+@login_required
 def delete_user(user_id):
+    if not current_user.is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    
     try:
         # Prevent admin from deleting themselves
-        if user_id == session.get('user_id'):
+        if user_id == current_user.id:
             return jsonify({"error": "Cannot delete your own account"}), 400
-
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -479,20 +463,34 @@ def delete_user(user_id):
         if not cursor.fetchone():
             return jsonify({"error": "User not found"}), 404
         
-        # Delete user
+        # Check if user has created any products
+        cursor.execute("SELECT COUNT(*) FROM products WHERE created_by = %s", (user_id,))
+        product_count = cursor.fetchone()[0]
+        
+        if product_count > 0:
+            # Delete user's products and inventory
+            cursor.execute("DELETE FROM inventory WHERE product_id IN (SELECT product_id FROM products WHERE created_by = %s)", (user_id,))
+            cursor.execute("DELETE FROM products WHERE created_by = %s", (user_id,))
+        
+        # Delete the user
         cursor.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
         conn.commit()
         cursor.close()
         
         return jsonify({"message": "User deleted successfully"}), 200
+        
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 # --- Image Upload Endpoint ---
 @app.route('/api/admin/upload', methods=['POST'])
-@seller_or_admin_required
+@login_required
 def upload_image():
+    # Only allow admin and approved sellers to upload images
+    if not (current_user.is_admin() or current_user.is_seller()):
+        return jsonify({"error": "Access denied"}), 403
+    
     try:
         # Check if the post request has the file part
         if 'image' not in request.files:
@@ -549,12 +547,11 @@ def get_products():
                 END AS stock_status
             FROM products p
             JOIN inventory i ON p.product_id = i.product_id
-            WHERE 1=1
         """
         
         params = []
         if search_term:
-            query += " AND (p.name ILIKE %s OR p.description ILIKE %s)"
+            query += " WHERE p.name ILIKE %s OR p.description ILIKE %s"
             params.extend([f'%{search_term}%', f'%{search_term}%'])
         
         cursor.execute(query, params)
@@ -599,8 +596,12 @@ def get_related_products(product_id):
 
 # --- Admin API Endpoints ---
 @app.route('/api/admin/products', methods=['POST'])
-@seller_or_admin_required
+@login_required
 def create_product():
+    # Only allow admin and approved sellers to create products
+    if not (current_user.is_admin() or current_user.is_seller()):
+        return jsonify({"error": "Access denied"}), 403
+    
     try:
         data = request.get_json()
         
@@ -613,12 +614,12 @@ def create_product():
         # Use default image if none provided
         image_url = data.get('image_url', '/static/default.png')
         
-        # Insert product with user who created it
+        # Insert product
         cursor.execute("""
             INSERT INTO products (name, description, price, category, image_url, created_by)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING product_id
         """, (data['name'], data.get('description', ''), data['price'], 
-              data['category'], image_url, session['user_id']))
+              data['category'], image_url, current_user.id))
         
         product_id = cursor.fetchone()[0]
         
@@ -638,23 +639,22 @@ def create_product():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/products/<int:product_id>', methods=['PUT'])
-@seller_or_admin_required
+@login_required
 def update_product(product_id):
+    # Only allow admin and approved sellers to update products
+    if not (current_user.is_admin() or current_user.is_seller()):
+        return jsonify({"error": "Access denied"}), 403
+    
     try:
         data = request.get_json()
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if product exists and user has permission
-        cursor.execute("SELECT created_by FROM products WHERE product_id = %s", (product_id,))
-        product = cursor.fetchone()
-        if not product:
+        # Check if product exists
+        cursor.execute("SELECT 1 FROM products WHERE product_id = %s", (product_id,))
+        if not cursor.fetchone():
             return jsonify({"error": "Product not found"}), 404
-        
-        # Only allow admin or the original creator to edit
-        if session['role'] != 'admin' and product[0] != session['user_id']:
-            return jsonify({"error": "Not authorized to edit this product"}), 403
         
         # Update product
         cursor.execute("""
@@ -679,21 +679,20 @@ def update_product(product_id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/products/<int:product_id>', methods=['DELETE'])
-@seller_or_admin_required
+@login_required
 def delete_product(product_id):
+    # Only allow admin to delete products
+    if not current_user.is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if product exists and user has permission
-        cursor.execute("SELECT created_by FROM products WHERE product_id = %s", (product_id,))
-        product = cursor.fetchone()
-        if not product:
+        # Check if product exists
+        cursor.execute("SELECT 1 FROM products WHERE product_id = %s", (product_id,))
+        if not cursor.fetchone():
             return jsonify({"error": "Product not found"}), 404
-        
-        # Only allow admin or the original creator to delete
-        if session['role'] != 'admin' and product[0] != session['user_id']:
-            return jsonify({"error": "Not authorized to delete this product"}), 403
         
         # Delete from inventory first (foreign key constraint)
         cursor.execute("DELETE FROM inventory WHERE product_id = %s", (product_id,))
