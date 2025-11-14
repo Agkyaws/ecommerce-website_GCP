@@ -85,7 +85,7 @@
                     <input type="hidden" id="product-id">
                     
                     <div>
-                        <label for="product-name" class="block text-sm font-medium text-gray-700">Product Name</label>
+                        <label for="product-name" class="block text-sm font-medium text-gray-700">Product Name *</label>
                         <input type="text" id="product-name" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
 
@@ -96,11 +96,11 @@
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label for="product-price" class="block text-sm font-medium text-gray-700">Price ($)</label>
+                            <label for="product-price" class="block text-sm font-medium text-gray-700">Price ($) *</label>
                             <input type="number" id="product-price" step="0.01" min="0" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
-                            <label for="product-category" class="block text-sm font-medium text-gray-700">Category</label>
+                            <label for="product-category" class="block text-sm font-medium text-gray-700">Category *</label>
                             <select id="product-category" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <option value="">Select Category</option>
                                 <option value="Electronics">Electronics</option>
@@ -110,13 +110,42 @@
                         </div>
                     </div>
 
+                    <!-- Image Upload Section -->
                     <div>
-                        <label for="product-image" class="block text-sm font-medium text-gray-700">Image URL</label>
-                        <input type="url" id="product-image" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="/static/p1.png">
+                        <label class="block text-sm font-medium text-gray-700">Product Image</label>
+                        
+                        <!-- Image Preview -->
+                        <div id="image-preview" class="mt-2 hidden">
+                            <img id="preview-image" src="" alt="Preview" class="w-32 h-32 object-cover rounded-lg border">
+                            <p id="image-name" class="text-sm text-gray-500 mt-1"></p>
+                        </div>
+
+                        <!-- Upload Controls -->
+                        <div class="mt-2 flex items-center gap-4">
+                            <label for="image-upload" class="cursor-pointer bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                                Choose Image
+                            </label>
+                            <input type="file" id="image-upload" accept="image/*" class="hidden">
+                            <button type="button" id="remove-image" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors hidden">
+                                Remove
+                            </button>
+                        </div>
+                        
+                        <!-- Upload Progress -->
+                        <div id="upload-progress" class="mt-2 hidden">
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                            <p id="progress-text" class="text-sm text-gray-600 mt-1">Uploading...</p>
+                        </div>
+
+                        <p class="text-xs text-gray-500 mt-1">
+                            Supported formats: PNG, JPG, JPEG, GIF, WEBP. Max size: 16MB
+                        </p>
                     </div>
 
                     <div>
-                        <label for="product-quantity" class="block text-sm font-medium text-gray-700">Initial Stock Quantity</label>
+                        <label for="product-quantity" class="block text-sm font-medium text-gray-700">Initial Stock Quantity *</label>
                         <input type="number" id="product-quantity" min="0" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
 
@@ -149,9 +178,20 @@
             const totalProductsEl = document.getElementById('total-products');
             const lowStockCountEl = document.getElementById('low-stock-count');
             const outOfStockCountEl = document.getElementById('out-of-stock-count');
+            
+            // Image upload elements
+            const imageUpload = document.getElementById('image-upload');
+            const imagePreview = document.getElementById('image-preview');
+            const previewImage = document.getElementById('preview-image');
+            const imageName = document.getElementById('image-name');
+            const removeImageBtn = document.getElementById('remove-image');
+            const uploadProgress = document.getElementById('upload-progress');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
 
             let allProducts = [];
             let editingProductId = null;
+            let currentImageUrl = '';
 
             // Navigation
             backToShopBtn.addEventListener('click', () => {
@@ -165,6 +205,10 @@
             cancelProductBtn.addEventListener('click', () => {
                 closeProductModal();
             });
+
+            // Image upload handling
+            imageUpload.addEventListener('change', handleImageUpload);
+            removeImageBtn.addEventListener('click', removeImage);
 
             // Search and filter
             adminSearch.addEventListener('input', filterProducts);
@@ -270,6 +314,7 @@
 
             function openProductModal(product = null) {
                 editingProductId = product ? product.product_id : null;
+                currentImageUrl = product ? product.image_url : '';
                 
                 if (product) {
                     modalTitle.textContent = 'Edit Product';
@@ -278,11 +323,19 @@
                     document.getElementById('product-description').value = product.description;
                     document.getElementById('product-price').value = product.price;
                     document.getElementById('product-category').value = product.category;
-                    document.getElementById('product-image').value = product.image_url;
                     document.getElementById('product-quantity').value = product.quantity;
+                    
+                    // Show existing image
+                    if (product.image_url) {
+                        previewImage.src = product.image_url;
+                        imageName.textContent = 'Current image';
+                        imagePreview.classList.remove('hidden');
+                        removeImageBtn.classList.remove('hidden');
+                    }
                 } else {
                     modalTitle.textContent = 'Add New Product';
                     productForm.reset();
+                    resetImageUpload();
                 }
                 
                 productFormModal.classList.remove('hidden');
@@ -291,7 +344,93 @@
             function closeProductModal() {
                 productFormModal.classList.add('hidden');
                 editingProductId = null;
+                currentImageUrl = '';
                 productForm.reset();
+                resetImageUpload();
+            }
+
+            function resetImageUpload() {
+                imagePreview.classList.add('hidden');
+                removeImageBtn.classList.add('hidden');
+                uploadProgress.classList.add('hidden');
+                progressBar.style.width = '0%';
+                imageUpload.value = '';
+                currentImageUrl = '';
+            }
+
+            function removeImage() {
+                resetImageUpload();
+            }
+
+            async function handleImageUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                // Validate file type and size
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                if (!validTypes.includes(file.type)) {
+                    alert('Please select a valid image file (JPEG, PNG, GIF, or WEBP)');
+                    resetImageUpload();
+                    return;
+                }
+
+                if (file.size > 16 * 1024 * 1024) {
+                    alert('File size must be less than 16MB');
+                    resetImageUpload();
+                    return;
+                }
+
+                // Show preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewImage.src = e.target.result;
+                    imageName.textContent = file.name;
+                    imagePreview.classList.remove('hidden');
+                    removeImageBtn.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+
+                // Upload to server
+                await uploadImage(file);
+            }
+
+            async function uploadImage(file) {
+                const formData = new FormData();
+                formData.append('image', file);
+
+                try {
+                    uploadProgress.classList.remove('hidden');
+                    progressBar.style.width = '30%';
+                    progressText.textContent = 'Uploading...';
+
+                    const response = await fetch('/api/admin/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    progressBar.style.width = '100%';
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        currentImageUrl = result.image_url;
+                        progressText.textContent = 'Upload complete!';
+                        
+                        // Hide progress after a delay
+                        setTimeout(() => {
+                            uploadProgress.classList.add('hidden');
+                        }, 1000);
+                    } else {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Upload failed');
+                    }
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    progressText.textContent = 'Upload failed';
+                    progressBar.style.backgroundColor = '#dc2626';
+                    alert('Image upload failed: ' + error.message);
+                    
+                    resetImageUpload();
+                }
             }
 
             async function editProduct(productId) {
@@ -331,9 +470,19 @@
                     description: document.getElementById('product-description').value,
                     price: parseFloat(document.getElementById('product-price').value),
                     category: document.getElementById('product-category').value,
-                    image_url: document.getElementById('product-image').value,
                     quantity: parseInt(document.getElementById('product-quantity').value)
                 };
+
+                // Use uploaded image URL if available, otherwise keep existing one for edits
+                if (currentImageUrl) {
+                    formData.image_url = currentImageUrl;
+                } else if (editingProductId) {
+                    // For edits, if no new image uploaded, keep the existing one
+                    const existingProduct = allProducts.find(p => p.product_id === editingProductId);
+                    formData.image_url = existingProduct ? existingProduct.image_url : '/static/default.png';
+                } else {
+                    formData.image_url = '/static/default.png';
+                }
 
                 try {
                     const url = editingProductId ? 
@@ -354,11 +503,12 @@
                         closeProductModal();
                         await loadAdminProducts();
                     } else {
-                        alert('Failed to save product');
+                        const error = await response.json();
+                        alert('Failed to save product: ' + (error.error || 'Unknown error'));
                     }
                 } catch (error) {
                     console.error('Error saving product:', error);
-                    alert('Error saving product');
+                    alert('Error saving product: ' + error.message);
                 }
             });
         });

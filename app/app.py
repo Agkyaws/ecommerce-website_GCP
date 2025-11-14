@@ -3,8 +3,24 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from flask import Flask, jsonify, g, send_from_directory, request
 import time
+import uuid
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+
+# Image upload configuration
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def ensure_upload_folder():
+    """Ensure the upload folder exists"""
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        os.makedirs(app.config['UPLOAD_FOLDER'])
 
 # --- Database Connection ---
 
@@ -108,12 +124,13 @@ def init_database():
     except Exception as e:
         print(f"❌ Database initialization failed: {e}")
 
-# Initialize database when app starts
+# Initialize database and upload folder when app starts
 with app.app_context():
     try:
         init_database()
+        ensure_upload_folder()
     except Exception as e:
-        print(f"❌ Initial database setup failed: {e}")
+        print(f"❌ Initial setup failed: {e}")
 
 # Health check endpoint
 @app.route('/health')
@@ -152,6 +169,44 @@ def serve_api_docs():
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     return send_from_directory('static', filename)
+
+# --- Image Upload Endpoint ---
+@app.route('/api/admin/upload', methods=['POST'])
+def upload_image():
+    try:
+        # Check if the post request has the file part
+        if 'image' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        
+        file = request.files['image']
+        
+        # If user does not select file, browser also submits an empty part without filename
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        if file and allowed_file(file.filename):
+            # Generate unique filename to prevent overwriting
+            filename = secure_filename(file.filename)
+            unique_filename = f"{uuid.uuid4().hex}_{filename}"
+            
+            # Ensure upload folder exists
+            ensure_upload_folder()
+            
+            # Save file
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            file.save(file_path)
+            
+            # Return the URL path for the saved image
+            image_url = f"/static/uploads/{unique_filename}"
+            return jsonify({
+                "message": "Image uploaded successfully",
+                "image_url": image_url
+            }), 200
+        else:
+            return jsonify({"error": "File type not allowed. Please upload PNG, JPG, JPEG, GIF, or WEBP."}), 400
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # --- API Endpoints ---
 @app.route('/api/products', methods=['GET'])
@@ -233,12 +288,15 @@ def create_product():
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Use default image if none provided
+        image_url = data.get('image_url', '/static/default.png')
+        
         # Insert product
         cursor.execute("""
             INSERT INTO products (name, description, price, category, image_url)
             VALUES (%s, %s, %s, %s, %s) RETURNING product_id
         """, (data['name'], data.get('description', ''), data['price'], 
-              data['category'], data.get('image_url', '/static/default.png')))
+              data['category'], image_url))
         
         product_id = cursor.fetchone()[0]
         
