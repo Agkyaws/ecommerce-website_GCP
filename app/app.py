@@ -135,10 +135,18 @@ def health_check():
             "error": str(e)
         }), 500
 
-# --- Frontend Route ---
+# --- Frontend Routes ---
 @app.route('/')
 def serve_index():
     return send_from_directory('.', 'index.html')
+
+@app.route('/admin')
+def serve_admin():
+    return send_from_directory('.', 'admin.html')
+
+@app.route('/api-docs')
+def serve_api_docs():
+    return send_from_directory('.', 'api-docs.html')
 
 # Serve static files
 @app.route('/static/<path:filename>')
@@ -150,6 +158,8 @@ def serve_static(filename):
 def get_products():
     try:
         search_term = request.args.get('search', '') 
+        admin_mode = request.args.get('admin', 'false').lower() == 'true'
+        
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -174,6 +184,13 @@ def get_products():
         cursor.execute(query, params)
         products = cursor.fetchall()
         cursor.close()
+        
+        # If not in admin mode, remove quantity field for security
+        if not admin_mode:
+            for product in products:
+                if 'quantity' in product:
+                    del product['quantity']
+        
         return jsonify(products)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -202,6 +219,103 @@ def get_related_products(product_id):
         cursor.close()
         return jsonify(related)
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- Admin API Endpoints ---
+@app.route('/api/admin/products', methods=['POST'])
+def create_product():
+    try:
+        data = request.get_json()
+        
+        if not data or not all(k in data for k in ['name', 'price', 'category', 'quantity']):
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Insert product
+        cursor.execute("""
+            INSERT INTO products (name, description, price, category, image_url)
+            VALUES (%s, %s, %s, %s, %s) RETURNING product_id
+        """, (data['name'], data.get('description', ''), data['price'], 
+              data['category'], data.get('image_url', '/static/default.png')))
+        
+        product_id = cursor.fetchone()[0]
+        
+        # Insert inventory
+        cursor.execute("""
+            INSERT INTO inventory (product_id, quantity)
+            VALUES (%s, %s)
+        """, (product_id, data['quantity']))
+        
+        conn.commit()
+        cursor.close()
+        
+        return jsonify({"message": "Product created successfully", "product_id": product_id}), 201
+        
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/products/<int:product_id>', methods=['PUT'])
+def update_product(product_id):
+    try:
+        data = request.get_json()
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if product exists
+        cursor.execute("SELECT 1 FROM products WHERE product_id = %s", (product_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Product not found"}), 404
+        
+        # Update product
+        cursor.execute("""
+            UPDATE products 
+            SET name = %s, description = %s, price = %s, category = %s, image_url = %s
+            WHERE product_id = %s
+        """, (data['name'], data.get('description', ''), data['price'], 
+              data['category'], data.get('image_url', '/static/default.png'), product_id))
+        
+        # Update inventory
+        cursor.execute("""
+            UPDATE inventory SET quantity = %s WHERE product_id = %s
+        """, (data['quantity'], product_id))
+        
+        conn.commit()
+        cursor.close()
+        
+        return jsonify({"message": "Product updated successfully"}), 200
+        
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/products/<int:product_id>', methods=['DELETE'])
+def delete_product(product_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if product exists
+        cursor.execute("SELECT 1 FROM products WHERE product_id = %s", (product_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Product not found"}), 404
+        
+        # Delete from inventory first (foreign key constraint)
+        cursor.execute("DELETE FROM inventory WHERE product_id = %s", (product_id,))
+        
+        # Delete product
+        cursor.execute("DELETE FROM products WHERE product_id = %s", (product_id,))
+        
+        conn.commit()
+        cursor.close()
+        
+        return jsonify({"message": "Product deleted successfully"}), 200
+        
+    except Exception as e:
+        conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 # --- Run the App ---

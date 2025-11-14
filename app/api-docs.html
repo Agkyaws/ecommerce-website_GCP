@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - My E-Commerce Shop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <nav class="container max-w-7xl mx-auto p-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">API Documentation</h1>
+            <button id="back-to-shop" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                Back to Shop
+            </button>
+        </nav>
+    </header>
+
+    <main class="container max-w-7xl mx-auto p-4 sm:p-8">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">E-Commerce API Documentation</h2>
+            <p class="text-gray-600 mb-6">
+                This documentation provides details about the available API endpoints for the e-commerce application.
+                All endpoints return JSON responses.
+            </p>
+
+            <!-- Health Check -->
+            <div class="mb-8">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">Health Check</h3>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-green-500 text-white px-2 py-1 rounded text-sm font-mono">GET</span>
+                        <code class="font-mono text-blue-600">/health</code>
+                    </div>
+                    <p class="text-gray-600 mb-3">Check the health status of the application and database connection.</p>
+                    
+                    <h4 class="font-semibold mb-2">Response:</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "status": "healthy",
+  "database": "connected",
+  "db_host": "10.0.2.3"
+}</code></pre>
+
+                    <button onclick="testEndpoint('/health', 'GET')" class="mt-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                        Test Endpoint
+                    </button>
+                </div>
+            </div>
+
+            <!-- Get Products -->
+            <div class="mb-8">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">Get Products</h3>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-green-500 text-white px-2 py-1 rounded text-sm font-mono">GET</span>
+                        <code class="font-mono text-blue-600">/api/products</code>
+                    </div>
+                    <p class="text-gray-600 mb-3">Retrieve all products with optional search filtering.</p>
+                    
+                    <h4 class="font-semibold mb-2">Query Parameters:</h4>
+                    <ul class="list-disc list-inside text-gray-600 mb-3 ml-4">
+                        <li><code>search</code> (optional): Filter products by name or description</li>
+                        <li><code>admin</code> (optional): Set to "true" to include inventory quantities</li>
+                    </ul>
+                    
+                    <h4 class="font-semibold mb-2">Response:</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">[
+  {
+    "product_id": 1,
+    "name": "Pro Laptop",
+    "description": "A 16-inch high-performance laptop for professionals.",
+    "price": 1200.00,
+    "category": "Electronics",
+    "image_url": "/static/p1.png",
+    "quantity": 5,
+    "stock_status": "In Stock"
+  }
+]</code></pre>
+
+                    <div class="flex gap-2 mt-3">
+                        <input type="text" id="search-param" placeholder="Search term (optional)" class="flex-grow px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button onclick="testEndpoint('/api/products' + (document.getElementById('search-param').value ? '?search=' + encodeURIComponent(document.getElementById('search-param').value) : ''), 'GET')" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                            Test Endpoint
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Get Related Products -->
+            <div class="mb-8">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">Get Related Products</h3>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-green-500 text-white px-2 py-1 rounded text-sm font-mono">GET</span>
+                        <code class="font-mono text-blue-600">/api/products/{product_id}/related</code>
+                    </div>
+                    <p class="text-gray-600 mb-3">Get products from the same category as the specified product.</p>
+                    
+                    <h4 class="font-semibold mb-2">Response:</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">[
+  {
+    "product_id": 2,
+    "name": "Wireless Mouse",
+    "price": 75.00,
+    "category": "Electronics",
+    "image_url": "/static/p3.png"
+  }
+]</code></pre>
+
+                    <div class="flex gap-2 mt-3">
+                        <input type="number" id="related-product-id" placeholder="Product ID" class="flex-grow px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value="1">
+                        <button onclick="testEndpoint('/api/products/' + document.getElementById('related-product-id').value + '/related', 'GET')" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                            Test Endpoint
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Endpoints -->
+            <div class="mb-8">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">Admin Endpoints</h3>
+                <p class="text-gray-600 mb-4">These endpoints require proper authentication and are used for product management.</p>
+
+                <!-- Add Product -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-blue-500 text-white px-2 py-1 rounded text-sm font-mono">POST</span>
+                        <code class="font-mono text-blue-600">/api/admin/products</code>
+                    </div>
+                    <p class="text-gray-600 mb-3">Create a new product.</p>
+                    
+                    <h4 class="font-semibold mb-2">Request Body:</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "name": "New Product",
+  "description": "Product description",
+  "price": 99.99,
+  "category": "Electronics",
+  "image_url": "/static/new-product.png",
+  "quantity": 10
+}</code></pre>
+
+                    <button onclick="testAdminEndpoint('/api/admin/products', 'POST')" class="mt-3 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                        Test Endpoint
+                    </button>
+                </div>
+
+                <!-- Update Product -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-yellow-500 text-white px-2 py-1 rounded text-sm font-mono">PUT</span>
+                        <code class="font-mono text-blue-600">/api/admin/products/{product_id}</code>
+                    </div>
+                    <p class="text-gray-600 mb-3">Update an existing product.</p>
+                    
+                    <h4 class="font-semibold mb-2">Request Body:</h4>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto"><code class="language-json">{
+  "name": "Updated Product",
+  "description": "Updated description",
+  "price": 89.99,
+  "category": "Electronics",
+  "image_url": "/static/updated-product.png",
+  "quantity": 15
+}</code></pre>
+
+                    <div class="flex gap-2 mt-3">
+                        <input type="number" id="update-product-id" placeholder="Product ID" class="flex-grow px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value="1">
+                        <button onclick="testAdminEndpoint('/api/admin/products/' + document.getElementById('update-product-id').value, 'PUT')" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                            Test Endpoint
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Delete Product -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-red-500 text-white px-2 py-1 rounded text-sm font-mono">DELETE</span>
+                        <code class="font-mono text-blue-600">/api/admin/products/{product_id}</code>
+                    </div>
+                    <p class="text-gray-600 mb-3">Delete a product.</p>
+
+                    <div class="flex gap-2 mt-3">
+                        <input type="number" id="delete-product-id" placeholder="Product ID" class="flex-grow px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value="1">
+                        <button onclick="testAdminEndpoint('/api/admin/products/' + document.getElementById('delete-product-id').value, 'DELETE')" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+                            Test Endpoint
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Results -->
+            <div class="mt-8">
+                <h3 class="text-xl font-semibold text-gray-800 mb-3">API Test Results</h3>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <pre id="test-results" class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 overflow-y-auto">Test results will appear here...</pre>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        hljs.highlightAll();
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('back-to-shop').addEventListener('click', () => {
+                window.location.href = '/';
+            });
+        });
+
+        async function testEndpoint(url, method) {
+            const resultsElement = document.getElementById('test-results');
+            
+            try {
+                resultsElement.textContent = `Testing ${method} ${url}...\n\n`;
+                
+                const response = await fetch(url, {
+                    method: method
+                });
+
+                const data = await response.json();
+                
+                resultsElement.textContent = `✅ ${method} ${url}\nStatus: ${response.status} ${response.statusText}\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultsElement.textContent = `❌ ${method} ${url}\nError: ${error.message}`;
+            }
+            
+            hljs.highlightAll();
+        }
+
+        async function testAdminEndpoint(url, method) {
+            const resultsElement = document.getElementById('test-results');
+            
+            // For demo purposes - in real implementation, you'd need proper authentication
+            const sampleData = {
+                name: "Test Product",
+                description: "This is a test product created via API",
+                price: 49.99,
+                category: "Electronics",
+                image_url: "/static/test-product.png",
+                quantity: 25
+            };
+
+            try {
+                resultsElement.textContent = `Testing ${method} ${url}...\n\n`;
+                
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                if (method === 'POST' || method === 'PUT') {
+                    options.body = JSON.stringify(sampleData);
+                }
+
+                const response = await fetch(url, options);
+                const data = await response.json();
+                
+                resultsElement.textContent = `✅ ${method} ${url}\nStatus: ${response.status} ${response.statusText}\n\nRequest: ${method !== 'DELETE' ? JSON.stringify(sampleData, null, 2) + '\\n\\n' : ''}Response:\n${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultsElement.textContent = `❌ ${method} ${url}\nError: ${error.message}`;
+            }
+            
+            hljs.highlightAll();
+        }
+    </script>
+</body>
+</html>

@@ -22,10 +22,18 @@
                 <input type="search" id="search-input" placeholder="Search for products..." class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             </form>
 
-            <button id="cart-button" class="relative bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                <span>Cart</span>
-                <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">0</span>
-            </button>
+            <div class="flex gap-4">
+                <button id="admin-btn" class="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">
+                    Admin
+                </button>
+                <button id="api-docs-btn" class="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors">
+                    API Docs
+                </button>
+                <button id="cart-button" class="relative bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                    <span>Cart</span>
+                    <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                </button>
+            </div>
         </nav>
     </header>
 
@@ -144,6 +152,8 @@
 
             const logoBtn = document.getElementById('logo-btn');
             const cartButton = document.getElementById('cart-button');
+            const adminBtn = document.getElementById('admin-btn');
+            const apiDocsBtn = document.getElementById('api-docs-btn');
             const cartCount = document.getElementById('cart-count');
             const searchForm = document.getElementById('search-form');
             const searchInput = document.getElementById('search-input');
@@ -375,12 +385,19 @@
                 renderCart();
             }
 
+            // Navigation
             logoBtn.addEventListener('click', () => {
                 showCatalogPage();
                 fetchProducts();
                 searchInput.value = '';
             });
             cartButton.addEventListener('click', showCheckoutPage);
+            adminBtn.addEventListener('click', () => {
+                window.location.href = '/admin';
+            });
+            apiDocsBtn.addEventListener('click', () => {
+                window.location.href = '/api-docs';
+            });
             
             searchForm.addEventListener('submit', (e) => {
                 e.preventDefault();
