@@ -23,12 +23,32 @@
             </form>
 
             <div class="flex gap-4">
-                <button id="admin-btn" class="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">
-                    Admin
-                </button>
-                <button id="api-docs-btn" class="bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors">
-                    API Docs
-                </button>
+                <!-- User Auth Section -->
+                <div id="auth-section" class="flex items-center gap-4">
+                    <div id="user-info" class="hidden flex items-center gap-2">
+                        <span id="username-display" class="text-gray-700"></span>
+                        <span id="user-role" class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full"></span>
+                        <button id="logout-btn" class="bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors text-sm">
+                            Logout
+                        </button>
+                    </div>
+                    <div id="auth-buttons" class="flex gap-2">
+                        <button id="login-btn" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                            Login
+                        </button>
+                        <button id="register-btn" class="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                            Register
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Admin and Cart Buttons -->
+                <div id="admin-section" class="hidden flex gap-4">
+                    <button id="admin-btn" class="bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">
+                        Admin
+                    </button>
+                </div>
+                
                 <button id="cart-button" class="relative bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
                     <span>Cart</span>
                     <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">0</span>
@@ -100,7 +120,7 @@
                         <p id="discount-message" class="text-sm mt-2"></p>
                     </form>
 
-                    <button class="w-full bg-green-600 text-white py-3 rounded-lg text-lg font-bold mt-6 hover:bg-green-700 transition-colors">
+                    <button id="checkout-btn" class="w-full bg-green-600 text-white py-3 rounded-lg text-lg font-bold mt-6 hover:bg-green-700 transition-colors">
                         Proceed to Checkout
                     </button>
                 </div>
@@ -110,7 +130,89 @@
     </main>
 
     <!-- 
-      The Modal (Pop-up)
+      Login Modal
+    -->
+    <div id="login-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-2xl max-w-md w-full">
+            <div class="p-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-6">Login</h2>
+                
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label for="login-username" class="block text-sm font-medium text-gray-700">Username *</label>
+                        <input type="text" id="login-username" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="login-password" class="block text-sm font-medium text-gray-700">Password *</label>
+                        <input type="password" id="login-password" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div id="login-message" class="text-sm text-red-600 hidden"></div>
+
+                    <div class="flex gap-4 pt-4">
+                        <button type="submit" class="flex-grow bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                            Login
+                        </button>
+                        <button type="button" id="cancel-login-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 
+      Register Modal
+    -->
+    <div id="register-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-2xl max-w-md w-full">
+            <div class="p-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-6">Register</h2>
+                
+                <form id="register-form" class="space-y-4">
+                    <div>
+                        <label for="register-username" class="block text-sm font-medium text-gray-700">Username *</label>
+                        <input type="text" id="register-username" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="register-email" class="block text-sm font-medium text-gray-700">Email *</label>
+                        <input type="email" id="register-email" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="register-password" class="block text-sm font-medium text-gray-700">Password *</label>
+                        <input type="password" id="register-password" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div>
+                        <label for="register-role" class="block text-sm font-medium text-gray-700">Role</label>
+                        <select id="register-role" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="user">User</option>
+                            <option value="seller">Seller</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Seller accounts require admin approval</p>
+                    </div>
+
+                    <div id="register-message" class="text-sm hidden"></div>
+
+                    <div class="flex gap-4 pt-4">
+                        <button type="submit" class="flex-grow bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                            Register
+                        </button>
+                        <button type="button" id="cancel-register-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 
+      The Product Modal (Pop-up)
     -->
     <div id="product-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full flex flex-col md:flex-row overflow-hidden">
@@ -144,16 +246,17 @@
             let cart = JSON.parse(localStorage.getItem('shoppingCart')) || [];
             let allProducts = [];
             let currentDiscount = null;
+            let currentUser = null;
 
             const VALID_DISCOUNTS = {
                 "DISCOUNT10": 0.10, // 10% off
                 "SAVE50": 0.50      // 50% off
             };
 
+            // DOM Elements
             const logoBtn = document.getElementById('logo-btn');
             const cartButton = document.getElementById('cart-button');
             const adminBtn = document.getElementById('admin-btn');
-            const apiDocsBtn = document.getElementById('api-docs-btn');
             const cartCount = document.getElementById('cart-count');
             const searchForm = document.getElementById('search-form');
             const searchInput = document.getElementById('search-input');
@@ -163,6 +266,18 @@
             const productGrid = document.getElementById('product-grid');
             const loadingIndicator = document.getElementById('loading');
             
+            // Auth Elements
+            const authSection = document.getElementById('auth-section');
+            const userInfo = document.getElementById('user-info');
+            const authButtons = document.getElementById('auth-buttons');
+            const usernameDisplay = document.getElementById('username-display');
+            const userRole = document.getElementById('user-role');
+            const logoutBtn = document.getElementById('logout-btn');
+            const loginBtn = document.getElementById('login-btn');
+            const registerBtn = document.getElementById('register-btn');
+            const adminSection = document.getElementById('admin-section');
+            
+            // Modal Elements
             const modal = document.getElementById('product-modal');
             const modalImage = document.getElementById('modal-image');
             const modalName = document.getElementById('modal-name');
@@ -173,6 +288,17 @@
             const modalAddToCartBtn = document.getElementById('modal-add-to-cart-btn');
             const closeModalBtn = document.getElementById('close-modal-btn');
             
+            // Auth Modals
+            const loginModal = document.getElementById('login-modal');
+            const registerModal = document.getElementById('register-modal');
+            const loginForm = document.getElementById('login-form');
+            const registerForm = document.getElementById('register-form');
+            const loginMessage = document.getElementById('login-message');
+            const registerMessage = document.getElementById('register-message');
+            const cancelLoginBtn = document.getElementById('cancel-login-btn');
+            const cancelRegisterBtn = document.getElementById('cancel-register-btn');
+            
+            // Cart Elements
             const cartItemsList = document.getElementById('cart-items-list');
             const summarySubtotal = document.getElementById('summary-subtotal');
             const summaryDiscountLine = document.getElementById('summary-discount-line');
@@ -181,6 +307,10 @@
             const discountForm = document.getElementById('discount-form');
             const discountCodeInput = document.getElementById('discount-code');
             const discountMessage = document.getElementById('discount-message');
+            const checkoutBtn = document.getElementById('checkout-btn');
+
+            // Check authentication status on page load
+            checkAuthStatus();
 
             function showCatalogPage() {
                 catalogPage.classList.remove('hidden');
@@ -188,9 +318,165 @@
             }
 
             function showCheckoutPage() {
+                // Only allow checkout if user is logged in
+                if (!currentUser) {
+                    openLoginModal();
+                    return;
+                }
                 catalogPage.classList.add('hidden');
                 checkoutPage.classList.remove('hidden');
                 renderCart();
+            }
+
+            function openLoginModal() {
+                loginModal.classList.remove('hidden');
+                loginMessage.classList.add('hidden');
+                loginForm.reset();
+            }
+
+            function closeLoginModal() {
+                loginModal.classList.add('hidden');
+            }
+
+            function openRegisterModal() {
+                registerModal.classList.remove('hidden');
+                registerMessage.classList.add('hidden');
+                registerForm.reset();
+            }
+
+            function closeRegisterModal() {
+                registerModal.classList.add('hidden');
+            }
+
+            async function checkAuthStatus() {
+                try {
+                    const response = await fetch('/api/user');
+                    if (response.ok) {
+                        const userData = await response.json();
+                        currentUser = userData;
+                        updateUIForUser(userData);
+                    } else {
+                        currentUser = null;
+                        updateUIForGuest();
+                    }
+                } catch (error) {
+                    console.error('Error checking auth status:', error);
+                    currentUser = null;
+                    updateUIForGuest();
+                }
+            }
+
+            function updateUIForUser(userData) {
+                userInfo.classList.remove('hidden');
+                authButtons.classList.add('hidden');
+                usernameDisplay.textContent = userData.username;
+                userRole.textContent = userData.role;
+                
+                // Show admin button only for admin users
+                if (userData.role === 'admin') {
+                    adminSection.classList.remove('hidden');
+                } else {
+                    adminSection.classList.add('hidden');
+                }
+            }
+
+            function updateUIForGuest() {
+                userInfo.classList.add('hidden');
+                authButtons.classList.remove('hidden');
+                adminSection.classList.add('hidden');
+            }
+
+            async function handleLogin(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('login-username').value;
+                const password = document.getElementById('login-password').value;
+
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        currentUser = data.user;
+                        updateUIForUser(data.user);
+                        closeLoginModal();
+                    } else {
+                        const error = await response.json();
+                        loginMessage.textContent = error.error;
+                        loginMessage.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    loginMessage.textContent = 'Login failed. Please try again.';
+                    loginMessage.classList.remove('hidden');
+                }
+            }
+
+            async function handleRegister(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('register-username').value;
+                const email = document.getElementById('register-email').value;
+                const password = document.getElementById('register-password').value;
+                const role = document.getElementById('register-role').value;
+
+                try {
+                    const response = await fetch('/api/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ username, email, password, role })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        registerMessage.textContent = data.needs_approval ? 
+                            'Registration successful! Your account is pending approval.' : 
+                            'Registration successful! You can now login.';
+                        registerMessage.className = 'text-sm mt-2 text-green-600';
+                        registerMessage.classList.remove('hidden');
+                        
+                        // Clear form and close modal after successful registration
+                        setTimeout(() => {
+                            if (!data.needs_approval) {
+                                closeRegisterModal();
+                                openLoginModal();
+                            }
+                        }, 2000);
+                    } else {
+                        const error = await response.json();
+                        registerMessage.textContent = error.error;
+                        registerMessage.className = 'text-sm mt-2 text-red-600';
+                        registerMessage.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Registration error:', error);
+                    registerMessage.textContent = 'Registration failed. Please try again.';
+                    registerMessage.className = 'text-sm mt-2 text-red-600';
+                    registerMessage.classList.remove('hidden');
+                }
+            }
+
+            async function handleLogout() {
+                try {
+                    const response = await fetch('/api/logout', {
+                        method: 'POST'
+                    });
+
+                    if (response.ok) {
+                        currentUser = null;
+                        updateUIForGuest();
+                    }
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
             }
 
             async function fetchProducts(searchTerm = '') {
@@ -283,6 +569,13 @@
             }
             
             function addToCart() {
+                // Only allow adding to cart if user is logged in
+                if (!currentUser) {
+                    closeModal();
+                    openLoginModal();
+                    return;
+                }
+
                 const productId = parseInt(modalAddToCartBtn.dataset.id);
                 const quantity = parseInt(modalQuantity.value);
                 const product = allProducts.find(p => p.product_id === productId);
@@ -385,6 +678,21 @@
                 renderCart();
             }
 
+            function handleCheckout() {
+                if (!currentUser) {
+                    openLoginModal();
+                    return;
+                }
+                
+                if (cart.length === 0) {
+                    alert('Your cart is empty!');
+                    return;
+                }
+                
+                // In a real application, you would integrate with a payment processor here
+                alert('Checkout functionality would be implemented here! This is just a demo.');
+            }
+
             // Navigation
             logoBtn.addEventListener('click', () => {
                 showCatalogPage();
@@ -395,9 +703,15 @@
             adminBtn.addEventListener('click', () => {
                 window.location.href = '/admin';
             });
-            apiDocsBtn.addEventListener('click', () => {
-                window.location.href = '/api-docs';
-            });
+            
+            // Auth Event Listeners
+            loginBtn.addEventListener('click', openLoginModal);
+            registerBtn.addEventListener('click', openRegisterModal);
+            logoutBtn.addEventListener('click', handleLogout);
+            loginForm.addEventListener('submit', handleLogin);
+            registerForm.addEventListener('submit', handleRegister);
+            cancelLoginBtn.addEventListener('click', closeLoginModal);
+            cancelRegisterBtn.addEventListener('click', closeRegisterModal);
             
             searchForm.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -424,6 +738,11 @@
             });
             
             discountForm.addEventListener('submit', applyDiscount);
+            checkoutBtn.addEventListener('click', handleCheckout);
+            
+            // Close modals when clicking outside
+            loginModal.addEventListener('click', (e) => { if (e.target === loginModal) closeLoginModal(); });
+            registerModal.addEventListener('click', (e) => { if (e.target === registerModal) closeRegisterModal(); });
             
             updateCartCount();
             fetchProducts();
