@@ -1,3 +1,7 @@
 Flask
 psycopg2-binary
 gunicorn
+flask-jwt-extended
+flask-bcrypt
+flask-cors
+flasgger
