@@ -3,49 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - CircuitCart</title>
+    <title>Admin Dashboard - My E-Commerce Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { 
-            theme: { 
-                extend: { 
-                    fontFamily: { 
-                        sans: ['Inter', 'sans-serif'] 
-                    },
-                    colors: {
-                        primary: {
-                            50: '#eff6ff',
-                            100: '#dbeafe',
-                            200: '#bfdbfe',
-                            300: '#93c5fd',
-                            400: '#60a5fa',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                            800: '#1e40af',
-                            900: '#1e3a8a',
-                        }
-                    }
-                } 
-            } 
-        }
-    </script>
 </head>
-<body class="bg-gray-50 font-sans">
-    <header class="bg-white shadow-sm sticky top-0 z-50">
+<body class="bg-gray-100 font-sans">
+    <header class="bg-white shadow-md sticky top-0 z-50">
         <nav class="container max-w-7xl mx-auto p-4 flex justify-between items-center">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-                    <span class="text-white font-bold text-sm">CC</span>
-                </div>
-                <h1 class="text-xl font-bold text-gray-800">CircuitCart Admin</h1>
-            </div>
+            <h1 class="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
             <div class="flex gap-4">
-                <button id="back-to-shop" class="bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors">
+                <button id="back-to-shop" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
                     Back to Shop
-                </button>
-                <button id="user-management-btn" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                    User Management
                 </button>
                 <button id="add-product-btn" class="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
                     Add New Product
@@ -56,13 +23,13 @@
 
     <main class="container max-w-7xl mx-auto p-4 sm:p-8">
         <!-- Products Management Section -->
-        <div id="products-management" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 class="text-2xl font-bold text-gray-800 mb-6">Products Management</h2>
             
             <!-- Search and Filters -->
             <div class="flex gap-4 mb-6">
-                <input type="text" id="admin-search" placeholder="Search products..." class="flex-grow px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-                <select id="category-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                <input type="text" id="admin-search" placeholder="Search products..." class="flex-grow px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select id="category-filter" class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="">All Categories</option>
                     <option value="Electronics">Electronics</option>
                     <option value="Homeware">Homeware</option>
@@ -91,42 +58,17 @@
             </div>
         </div>
 
-        <!-- User Management Section (Hidden by default) -->
-        <div id="user-management" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 hidden">
-            <h2 class="text-2xl font-bold text-gray-800 mb-6">User Management</h2>
-            
-            <!-- Users Table -->
-            <div class="overflow-x-auto">
-                <table class="w-full table-auto">
-                    <thead>
-                        <tr class="bg-gray-50">
-                            <th class="px-4 py-2 text-left">User ID</th>
-                            <th class="px-4 py-2 text-left">Name</th>
-                            <th class="px-4 py-2 text-left">Email</th>
-                            <th class="px-4 py-2 text-left">Role</th>
-                            <th class="px-4 py-2 text-left">Approved</th>
-                            <th class="px-4 py-2 text-left">Joined</th>
-                            <th class="px-4 py-2 text-left">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="admin-users-table">
-                        <!-- Users will be loaded here -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
         <!-- Inventory Overview -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="bg-white rounded-lg shadow-md p-6">
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Total Products</h3>
-                <p id="total-products" class="text-3xl font-bold text-primary-600">0</p>
+                <p id="total-products" class="text-3xl font-bold text-blue-600">0</p>
             </div>
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="bg-white rounded-lg shadow-md p-6">
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Low Stock Items</h3>
                 <p id="low-stock-count" class="text-3xl font-bold text-yellow-600">0</p>
             </div>
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="bg-white rounded-lg shadow-md p-6">
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Out of Stock</h3>
                 <p id="out-of-stock-count" class="text-3xl font-bold text-red-600">0</p>
             </div>
@@ -144,22 +86,22 @@
                     
                     <div>
                         <label for="product-name" class="block text-sm font-medium text-gray-700">Product Name *</label>
-                        <input type="text" id="product-name" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <input type="text" id="product-name" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
 
                     <div>
                         <label for="product-description" class="block text-sm font-medium text-gray-700">Description</label>
-                        <textarea id="product-description" rows="3" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"></textarea>
+                        <textarea id="product-description" rows="3" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                     </div>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label for="product-price" class="block text-sm font-medium text-gray-700">Price ($) *</label>
-                            <input type="number" id="product-price" step="0.01" min="0" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                            <input type="number" id="product-price" step="0.01" min="0" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div>
                             <label for="product-category" class="block text-sm font-medium text-gray-700">Category *</label>
-                            <select id="product-category" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                            <select id="product-category" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                 <option value="">Select Category</option>
                                 <option value="Electronics">Electronics</option>
                                 <option value="Homeware">Homeware</option>
@@ -180,7 +122,7 @@
 
                         <!-- Upload Controls -->
                         <div class="mt-2 flex items-center gap-4">
-                            <label for="image-upload" class="cursor-pointer bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors">
+                            <label for="image-upload" class="cursor-pointer bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
                                 Choose Image
                             </label>
                             <input type="file" id="image-upload" accept="image/*" class="hidden">
@@ -192,7 +134,7 @@
                         <!-- Upload Progress -->
                         <div id="upload-progress" class="mt-2 hidden">
                             <div class="w-full bg-gray-200 rounded-full h-2.5">
-                                <div id="progress-bar" class="bg-primary-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
                             </div>
                             <p id="progress-text" class="text-sm text-gray-600 mt-1">Uploading...</p>
                         </div>
@@ -204,11 +146,11 @@
 
                     <div>
                         <label for="product-quantity" class="block text-sm font-medium text-gray-700">Initial Stock Quantity *</label>
-                        <input type="number" id="product-quantity" min="0" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <input type="number" id="product-quantity" min="0" required class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
 
                     <div class="flex gap-4 pt-4">
-                        <button type="submit" id="save-product-btn" class="flex-grow bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors">
+                        <button type="submit" id="save-product-btn" class="flex-grow bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
                             Save Product
                         </button>
                         <button type="button" id="cancel-product-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
@@ -220,102 +162,19 @@
         </div>
     </div>
 
-    <!-- Edit User Modal -->
-    <div id="user-form-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-lg shadow-2xl max-w-md w-full">
-            <div class="p-6">
-                <h2 id="user-modal-title" class="text-2xl font-bold text-gray-900 mb-6">Edit User</h2>
-                
-                <form id="user-form" class="space-y-4">
-                    <input type="hidden" id="user-id">
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Name</label>
-                        <p id="user-full-name" class="mt-1 text-gray-900 font-semibold"></p>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Email</label>
-                        <p id="user-email" class="mt-1 text-gray-900"></p>
-                    </div>
-
-                    <div>
-                        <label for="user-role" class="block text-sm font-medium text-gray-700">Role</label>
-                        <select id="user-role" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-                            <option value="user">User</option>
-                            <option value="seller">Seller</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-
-                    <div class="flex items-center">
-                        <input type="checkbox" id="user-approved" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
-                        <label for="user-approved" class="ml-2 block text-sm text-gray-900">
-                            Account Approved
-                        </label>
-                    </div>
-
-                    <div class="flex gap-4 pt-4">
-                        <button type="submit" class="flex-grow bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 transition-colors">
-                            Save Changes
-                        </button>
-                        <button type="button" id="cancel-user-btn" class="bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">
-                            Cancel
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            console.log('CircuitCart Admin dashboard loaded.');
-
-            // Check authentication
-            const token = localStorage.getItem('authToken');
-            if (!token) {
-                window.location.href = '/';
-                return;
-            }
-
-            // Verify admin role
-            try {
-                const response = await fetch('/api/auth/me', {
-                    headers: {
-                        'Authorization': 'Bearer ' + token
-                    }
-                });
-
-                if (!response.ok) {
-                    window.location.href = '/';
-                    return;
-                }
-
-                const data = await response.json();
-                if (data.user.role !== 'admin') {
-                    window.location.href = '/';
-                    return;
-                }
-            } catch (error) {
-                window.location.href = '/';
-                return;
-            }
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Admin dashboard loaded.');
 
             const backToShopBtn = document.getElementById('back-to-shop');
-            const userManagementBtn = document.getElementById('user-management-btn');
             const addProductBtn = document.getElementById('add-product-btn');
             const adminSearch = document.getElementById('admin-search');
             const categoryFilter = document.getElementById('category-filter');
             const productsTable = document.getElementById('admin-products-table');
-            const usersTable = document.getElementById('admin-users-table');
             const productFormModal = document.getElementById('product-form-modal');
-            const userFormModal = document.getElementById('user-form-modal');
             const productForm = document.getElementById('product-form');
-            const userForm = document.getElementById('user-form');
             const modalTitle = document.getElementById('modal-title');
             const cancelProductBtn = document.getElementById('cancel-product-btn');
-            const cancelUserBtn = document.getElementById('cancel-user-btn');
             const totalProductsEl = document.getElementById('total-products');
             const lowStockCountEl = document.getElementById('low-stock-count');
             const outOfStockCountEl = document.getElementById('out-of-stock-count');
@@ -330,14 +189,8 @@
             const progressBar = document.getElementById('progress-bar');
             const progressText = document.getElementById('progress-text');
 
-            // User management elements
-            const productsManagement = document.getElementById('products-management');
-            const userManagement = document.getElementById('user-management');
-
             let allProducts = [];
-            let allUsers = [];
             let editingProductId = null;
-            let editingUserId = null;
             let currentImageUrl = '';
 
             // Navigation
@@ -345,24 +198,12 @@
                 window.location.href = '/';
             });
 
-            userManagementBtn.addEventListener('click', () => {
-                productsManagement.classList.add('hidden');
-                userManagement.classList.remove('hidden');
-                loadUsers();
-            });
-
             addProductBtn.addEventListener('click', () => {
-                productsManagement.classList.remove('hidden');
-                userManagement.classList.add('hidden');
                 openProductModal();
             });
 
             cancelProductBtn.addEventListener('click', () => {
                 closeProductModal();
-            });
-
-            cancelUserBtn.addEventListener('click', () => {
-                closeUserModal();
             });
 
             // Image upload handling
@@ -373,16 +214,12 @@
             adminSearch.addEventListener('input', filterProducts);
             categoryFilter.addEventListener('change', filterProducts);
 
-            // Load initial data
+            // Load products
             loadAdminProducts();
 
             async function loadAdminProducts() {
                 try {
-                    const response = await fetch('/api/products?admin=true', {
-                        headers: {
-                            'Authorization': 'Bearer ' + token
-                        }
-                    });
+                    const response = await fetch('/api/products?admin=true');
                     if (!response.ok) throw new Error('Failed to fetch products');
                     
                     allProducts = await response.json();
@@ -391,23 +228,6 @@
                 } catch (error) {
                     console.error('Error loading products:', error);
                     productsTable.innerHTML = '<tr><td colspan="7" class="px-4 py-2 text-center text-red-500">Error loading products</td></tr>';
-                }
-            }
-
-            async function loadUsers() {
-                try {
-                    const response = await fetch('/api/admin/users', {
-                        headers: {
-                            'Authorization': 'Bearer ' + token
-                        }
-                    });
-                    if (!response.ok) throw new Error('Failed to fetch users');
-                    
-                    allUsers = await response.json();
-                    renderUsersTable(allUsers);
-                } catch (error) {
-                    console.error('Error loading users:', error);
-                    usersTable.innerHTML = '<tr><td colspan="7" class="px-4 py-2 text-center text-red-500">Error loading users</td></tr>';
                 }
             }
 
@@ -424,7 +244,7 @@
                     row.className = 'border-b hover:bg-gray-50';
                     row.innerHTML = `
                         <td class="px-4 py-2">
-                            <img src="${product.image_url}" alt="${product.name}" class="w-12 h-12 object-cover rounded border">
+                            <img src="${product.image_url}" alt="${product.name}" class="w-12 h-12 object-cover rounded">
                         </td>
                         <td class="px-4 py-2 font-semibold">${product.name}</td>
                         <td class="px-4 py-2">${product.category}</td>
@@ -434,7 +254,7 @@
                             ${getStatusBadge(product.stock_status)}
                         </td>
                         <td class="px-4 py-2">
-                            <button class="edit-product-btn bg-primary-500 text-white px-3 py-1 rounded text-sm hover:bg-primary-600 mr-2" data-id="${product.product_id}">
+                            <button class="edit-product-btn bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600 mr-2" data-id="${product.product_id}">
                                 Edit
                             </button>
                             <button class="delete-product-btn bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600" data-id="${product.product_id}">
@@ -457,56 +277,6 @@
                     btn.addEventListener('click', (e) => {
                         const productId = e.target.dataset.id;
                         deleteProduct(productId);
-                    });
-                });
-            }
-
-            function renderUsersTable(users) {
-                usersTable.innerHTML = '';
-                
-                if (users.length === 0) {
-                    usersTable.innerHTML = '<tr><td colspan="7" class="px-4 py-2 text-center text-gray-500">No users found</td></tr>';
-                    return;
-                }
-
-                users.forEach(user => {
-                    const row = document.createElement('tr');
-                    row.className = 'border-b hover:bg-gray-50';
-                    row.innerHTML = `
-                        <td class="px-4 py-2">${user.user_id}</td>
-                        <td class="px-4 py-2 font-semibold">${user.first_name} ${user.last_name}</td>
-                        <td class="px-4 py-2">${user.email}</td>
-                        <td class="px-4 py-2">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                                user.role === 'seller' ? 'bg-green-100 text-green-800' :
-                                'bg-blue-100 text-blue-800'
-                            }">
-                                ${user.role}
-                            </span>
-                        </td>
-                        <td class="px-4 py-2">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                user.is_approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                            }">
-                                ${user.is_approved ? 'Approved' : 'Pending'}
-                            </span>
-                        </td>
-                        <td class="px-4 py-2">${new Date(user.created_at).toLocaleDateString()}</td>
-                        <td class="px-4 py-2">
-                            <button class="edit-user-btn bg-primary-500 text-white px-3 py-1 rounded text-sm hover:bg-primary-600" data-id="${user.user_id}">
-                                Edit
-                            </button>
-                        </td>
-                    `;
-                    usersTable.appendChild(row);
-                });
-
-                // Add event listeners to buttons
-                document.querySelectorAll('.edit-user-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        const userId = e.target.dataset.id;
-                        editUser(userId);
                     });
                 });
             }
@@ -579,27 +349,6 @@
                 resetImageUpload();
             }
 
-            function openUserModal(user = null) {
-                editingUserId = user ? user.user_id : null;
-                
-                if (user) {
-                    document.getElementById('user-modal-title').textContent = 'Edit User';
-                    document.getElementById('user-id').value = user.user_id;
-                    document.getElementById('user-full-name').textContent = `${user.first_name} ${user.last_name}`;
-                    document.getElementById('user-email').textContent = user.email;
-                    document.getElementById('user-role').value = user.role;
-                    document.getElementById('user-approved').checked = user.is_approved;
-                }
-                
-                userFormModal.classList.remove('hidden');
-            }
-
-            function closeUserModal() {
-                userFormModal.classList.add('hidden');
-                editingUserId = null;
-                userForm.reset();
-            }
-
             function resetImageUpload() {
                 imagePreview.classList.add('hidden');
                 removeImageBtn.classList.add('hidden');
@@ -656,9 +405,6 @@
 
                     const response = await fetch('/api/admin/upload', {
                         method: 'POST',
-                        headers: {
-                            'Authorization': 'Bearer ' + token
-                        },
                         body: formData
                     });
 
@@ -694,13 +440,6 @@
                 }
             }
 
-            async function editUser(userId) {
-                const user = allUsers.find(u => u.user_id === parseInt(userId));
-                if (user) {
-                    openUserModal(user);
-                }
-            }
-
             async function deleteProduct(productId) {
                 if (!confirm('Are you sure you want to delete this product?')) {
                     return;
@@ -708,15 +447,11 @@
 
                 try {
                     const response = await fetch(`/api/admin/products/${productId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': 'Bearer ' + token
-                        }
+                        method: 'DELETE'
                     });
 
                     if (response.ok) {
                         await loadAdminProducts();
-                        alert('Product deleted successfully');
                     } else {
                         alert('Failed to delete product');
                     }
@@ -726,7 +461,7 @@
                 }
             }
 
-            // Handle product form submission
+            // Handle form submission
             productForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
@@ -759,7 +494,6 @@
                     const response = await fetch(url, {
                         method: method,
                         headers: {
-                            'Authorization': 'Bearer ' + token,
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify(formData)
@@ -768,7 +502,6 @@
                     if (response.ok) {
                         closeProductModal();
                         await loadAdminProducts();
-                        alert('Product saved successfully');
                     } else {
                         const error = await response.json();
                         alert('Failed to save product: ' + (error.error || 'Unknown error'));
@@ -776,39 +509,6 @@
                 } catch (error) {
                     console.error('Error saving product:', error);
                     alert('Error saving product: ' + error.message);
-                }
-            });
-
-            // Handle user form submission
-            userForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                const formData = {
-                    role: document.getElementById('user-role').value,
-                    is_approved: document.getElementById('user-approved').checked
-                };
-
-                try {
-                    const response = await fetch(`/api/admin/users/${editingUserId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Authorization': 'Bearer ' + token,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(formData)
-                    });
-
-                    if (response.ok) {
-                        closeUserModal();
-                        await loadUsers();
-                        alert('User updated successfully');
-                    } else {
-                        const error = await response.json();
-                        alert('Failed to update user: ' + (error.error || 'Unknown error'));
-                    }
-                } catch (error) {
-                    console.error('Error updating user:', error);
-                    alert('Error updating user: ' + error.message);
                 }
             });
         });
