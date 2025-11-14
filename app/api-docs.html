@@ -176,7 +176,7 @@
                 </div>
 
                 <!-- Delete Product -->
-                <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                <div class="bg-gray-50 rounded-lg p-4">
                     <div class="flex items-center gap-2 mb-2">
                         <span class="bg-red-500 text-white px-2 py-1 rounded text-sm font-mono">DELETE</span>
                         <code class="font-mono text-blue-600">/api/admin/products/{product_id}</code>
@@ -186,29 +186,6 @@
                     <div class="flex gap-2 mt-3">
                         <input type="number" id="delete-product-id" placeholder="Product ID" class="flex-grow px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value="1">
                         <button onclick="testAdminEndpoint('/api/admin/products/' + document.getElementById('delete-product-id').value, 'DELETE')" 
-                                class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
-                            Test Endpoint
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Delete User -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="bg-red-500 text-white px-2 py-1 rounded text-sm font-mono">DELETE</span>
-                        <code class="font-mono text-blue-600">/api/admin/users/{user_id}</code>
-                    </div>
-                    <p class="text-gray-600 mb-3">Delete a user account.</p>
-                    
-                    <h4 class="font-semibold mb-2">Notes:</h4>
-                    <ul class="list-disc list-inside text-gray-600 mb-3 ml-4">
-                        <li>Admin cannot delete their own account</li>
-                        <li>If user has created products, those products will also be deleted</li>
-                    </ul>
-
-                    <div class="flex gap-2 mt-3">
-                        <input type="number" id="delete-user-id" placeholder="User ID" class="flex-grow px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500" value="1">
-                        <button onclick="testAdminEndpoint('/api/admin/users/' + document.getElementById('delete-user-id').value, 'DELETE')" 
                                 class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">
                             Test Endpoint
                         </button>
@@ -278,7 +255,6 @@
                     }
                 };
 
-                // Only include body for POST and PUT requests
                 if (method === 'POST' || method === 'PUT') {
                     options.body = JSON.stringify(sampleData);
                 }
@@ -286,13 +262,7 @@
                 const response = await fetch(url, options);
                 const data = await response.json();
                 
-                // Adjust the response display based on the method
-                let requestInfo = '';
-                if (method === 'POST' || method === 'PUT') {
-                    requestInfo = `Request: ${JSON.stringify(sampleData, null, 2)}\n\n`;
-                }
-                
-                resultsElement.textContent = `✅ ${method} ${url}\nStatus: ${response.status} ${response.statusText}\n\n${requestInfo}Response:\n${JSON.stringify(data, null, 2)}`;
+                resultsElement.textContent = `✅ ${method} ${url}\nStatus: ${response.status} ${response.statusText}\n\nRequest: ${method !== 'DELETE' ? JSON.stringify(sampleData, null, 2) + '\\n\\n' : ''}Response:\n${JSON.stringify(data, null, 2)}`;
             } catch (error) {
                 resultsElement.textContent = `❌ ${method} ${url}\nError: ${error.message}`;
             }
