@@ -508,6 +508,21 @@ def health_check():
             "database": "disconnected", 
             "error": str(e)
         }), 500
+# Debug endpoint to check environment variables
+@app.route('/api/debug/env')
+def debug_env():
+    """Debug endpoint to check environment variables"""
+    return jsonify({
+        "db_host_set": bool(os.environ.get('DB_HOST')),
+        "db_name_set": bool(os.environ.get('DB_NAME')),
+        "db_user_set": bool(os.environ.get('DB_USER')),
+        "db_pass_set": bool(os.environ.get('DB_PASS')),
+        "jwt_secret_set": bool(os.environ.get('JWT_SECRET_KEY')),
+        "db_host_value": os.environ.get('DB_HOST', 'Not set')[:10] + "..." if os.environ.get('DB_HOST') else 'Not set',
+        "db_name_value": os.environ.get('DB_NAME', 'Not set'),
+        "db_user_value": os.environ.get('DB_USER', 'Not set'),
+        "jwt_secret_value": os.environ.get('JWT_SECRET_KEY', 'Not set')[:10] + "..." if os.environ.get('JWT_SECRET_KEY') else 'Not set'
+    })
 
 # --- Frontend Routes ---
 @app.route('/')
