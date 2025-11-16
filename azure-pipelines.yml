@@ -59,7 +59,7 @@ stages:
         docker push $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest
       displayName: '5. Push Docker Image'
           
-    # 7. Deploy to Cloud Run with ALL environment variables
+    # 7. Deploy to Cloud Run - SIMPLE VERSION (like before)
     - script: |
         gcloud run deploy $(GCP_SERVICE_NAME) \
           --image=$(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) \
@@ -67,25 +67,9 @@ stages:
           --project=$(GCP_PROJECT_ID) \
           --platform=managed \
           --allow-unauthenticated \
-          --timeout=600 \
-          --cpu=1 \
           --memory=1Gi \
-          --set-env-vars="DB_HOST=$(DB_HOST)" \
-          --set-env-vars="DB_NAME=$(DB_NAME)" \
-          --set-env-vars="DB_USER=$(DB_USER)" \
-          --set-secrets="DB_PASS=projects/$(GCP_PROJECT_ID)/secrets/shop-app-db-user-pass:latest" \
-          --set-env-vars="SECRET_KEY=$(FLASK_SECRET_KEY)" \
-          --set-env-vars="GCP_PROJECT=$(GCP_PROJECT_ID)" \
-          --set-env-vars="UPLOAD_BUCKET=$(UPLOAD_BUCKET)" \
-          --set-env-vars="ENABLE_SWAGGER=true" \
-          --update-secrets=DB_PASS=projects/$(GCP_PROJECT_ID)/secrets/shop-app-db-user-pass:latest
+          --timeout=600
       displayName: '6. Deploy to Cloud Run'
-      env:
-        DB_HOST: $(DB_HOST)
-        DB_NAME: $(DB_NAME)
-        DB_USER: $(DB_USER)
-        FLASK_SECRET_KEY: $(FLASK_SECRET_KEY)
-        UPLOAD_BUCKET: $(UPLOAD_BUCKET)
 
     # 8. Verify deployment
     - script: |
