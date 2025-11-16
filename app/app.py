@@ -8,8 +8,7 @@ import time
 import uuid
 from werkzeug.utils import secure_filename
 from flasgger import Swagger
-from google.cloud import storage
-import google.auth
+import base64
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -44,18 +43,13 @@ def protect_swagger_ui():
         if not current_user.is_admin():
             return jsonify({"error": "Admin access required"}), 403
 
-# Image upload configuration - using GCP Cloud Storage
-app.config['UPLOAD_BUCKET'] = os.environ.get('UPLOAD_BUCKET', 'shop-app-uploads')
+# Image upload configuration
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def get_storage_client():
-    """Get Google Cloud Storage client"""
-    return storage.Client()
 
 # --- User Class ---
 class User(UserMixin):
@@ -1036,14 +1030,14 @@ def delete_api_key(key_id):
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
-# --- Image Upload Endpoint (GCP Cloud Storage) ---
+# --- Image Upload Endpoint (Local Storage with Base64) ---
 @app.route('/api/admin/upload', methods=['POST'])
 @api_key_required
 @seller_api_key_required
 def upload_image():
     """
     Upload Image (Admin/Seller)
-    Uploads a product image to Google Cloud Storage and returns the URL.
+    Uploads a product image using base64 encoding.
     ---
     tags:
       - Product Management
@@ -1068,6 +1062,8 @@ def upload_image():
         description: Access denied.
     """
     try:
+        print("📸 Local image upload started")
+        
         if 'image' not in request.files:
             return jsonify({"error": "No file part"}), 400
 
@@ -1075,36 +1071,39 @@ def upload_image():
         if file.filename == '':
             return jsonify({"error": "No selected file"}), 400
 
+        print(f"📁 File received: {file.filename}")
+        
         if file and allowed_file(file.filename):
-            # Initialize Google Cloud Storage client
-            storage_client = get_storage_client()
-            bucket = storage_client.bucket(app.config['UPLOAD_BUCKET'])
+            # Read file data
+            file_data = file.read()
             
-            # Generate unique filename
-            filename = secure_filename(file.filename)
-            unique_filename = f"{uuid.uuid4().hex}_{filename}"
-            blob = bucket.blob(f"uploads/{unique_filename}")
+            # Convert to base64
+            encoded_string = base64.b64encode(file_data).decode('utf-8')
             
-            # Upload file to GCS
-            blob.upload_from_string(
-                file.read(),
-                content_type=file.content_type
-            )
+            # Determine MIME type
+            mime_type = file.content_type
+            if not mime_type:
+                # Fallback based on file extension
+                ext = file.filename.rsplit('.', 1)[1].lower()
+                mime_type = f"image/{ext}" if ext in ['png', 'jpg', 'jpeg', 'gif', 'webp'] else 'image/jpeg'
             
-            # Make the blob publicly accessible
-            blob.make_public()
+            # Create data URL
+            image_url = f"data:{mime_type};base64,{encoded_string}"
             
-            image_url = blob.public_url
+            print(f"✅ File converted to base64, size: {len(encoded_string)} chars")
             
             return jsonify({
-                "message": "Image uploaded successfully",
-                "image_url": image_url
+                "message": "Image uploaded as base64",
+                "image_url": image_url,
+                "note": "Base64 encoding - works in all environments"
             }), 200
+            
         else:
             return jsonify({"error": "File type not allowed. Please upload PNG, JPG, JPEG, GIF, or WEBP."}), 400
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"💥 Base64 upload failed: {str(e)}")
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500
 
 # --- API Endpoints ---
 @app.route('/api/products', methods=['GET'])

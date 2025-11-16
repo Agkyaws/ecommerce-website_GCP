@@ -48,14 +48,6 @@ stages:
     - script: gcloud auth configure-docker $(GCP_REGION)-docker.pkg.dev --quiet
       displayName: '3. Configure Docker for Artifact Registry'
       
-    # 4.5 Verify critical dependencies
-    - script: |
-        echo "Checking for required dependencies..."
-        grep "google-cloud-storage" ./app/requirements.txt || exit 1
-        grep "google-auth" ./app/requirements.txt || exit 1
-        echo "✅ All required dependencies found"
-      displayName: '4.5 Verify Dependencies'
-
     # 5. Build the Docker Image
     - script: |
         cd app
@@ -77,8 +69,7 @@ stages:
           --platform=managed \
           --allow-unauthenticated \
           --memory=1Gi \
-          --timeout=600 \
-          --update-env-vars="UPLOAD_BUCKET=$(UPLOAD_BUCKET)"
+          --timeout=600
       displayName: '6. Deploy to Cloud Run'
 
     # 8. Verify deployment
