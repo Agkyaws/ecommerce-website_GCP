@@ -50,7 +50,7 @@ stages:
       
     # 5. Build the Docker Image
     - script: |
-        docker build -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest .
+        docker build -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):$(IMAGE_TAG) -t $(DOCKER_REGISTRY_PATH)/$(IMAGE_NAME):latest ./app
       displayName: '4. Build Docker Image'
       
     # 6. Push the Docker Image
