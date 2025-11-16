@@ -7,64 +7,78 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import time
 import uuid
 from werkzeug.utils import secure_filename
-from flasgger import Swagger, swag_from
+from flasgger import Swagger
+from google.cloud import storage
+import google.auth
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# --- Swagger Configuration ---
+app.config['SWAGGER'] = {
+    'title': 'CircuitCart API',
+    'uiversion': 3,
+    'doc_expansion': 'list',
+    'url_prefix': '/swagger',
+    'securityDefinitions': {
+        'cookieAuth': {
+            'type': 'apiKey',
+            'in': 'cookie',
+            'name': 'session'
+        }
+    }
+}
+swagger = Swagger(app)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'serve_index'
 
-# Initialize Swagger
-swagger_config = {
-    "headers": [],
-    "specs": [
-        {
-            "endpoint": 'apispec_1',
-            "route": '/apispec_1.json',
-            "rule_filter": lambda rule: True,
-            "model_filter": lambda tag: True,
-        }
-    ],
-    "static_url_path": "/flasgger_static",
-    "swagger_ui": True,
-    "specs_route": "/api-docs/"
-}
-swagger = Swagger(app, config=swagger_config)
+# --- Secure Swagger UI ---
+@app.before_request
+def protect_swagger_ui():
+    if request.path.startswith(app.config['SWAGGER']['url_prefix']):
+        if not current_user.is_authenticated:
+            return redirect(url_for('serve_index'))
+        if not current_user.is_admin():
+            return jsonify({"error": "Admin access required"}), 403
 
-# Image upload configuration
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+# Image upload configuration - using GCP Cloud Storage
+app.config['UPLOAD_BUCKET'] = os.environ.get('UPLOAD_BUCKET', 'shop-app-uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def ensure_upload_folder():
-    """Ensure the upload folder exists"""
-    if not os.path.exists(app.config['UPLOAD_FOLDER']):
-        os.makedirs(app.config['UPLOAD_FOLDER'])
+def get_storage_client():
+    """Get Google Cloud Storage client"""
+    return storage.Client()
 
-# User class for Flask-Login
+# --- User Class ---
 class User(UserMixin):
-    def __init__(self, user_id, username, email, role, approved):
+    def __init__(self, user_id, username, email, role, approved, suspended):
         self.id = user_id
         self.username = username
         self.email = email
         self.role = role
         self.approved = approved
+        self.suspended = suspended
+
+    @property
+    def is_active(self):
+        return self.approved and not self.suspended
 
     def is_admin(self):
-        return self.role == 'admin' and self.approved
-    
+        return self.role == 'admin' and self.is_active
+
     def is_seller(self):
-        return self.role == 'seller' and self.approved
-    
+        return self.role == 'seller' and self.is_active
+
     def is_user(self):
-        return self.role == 'user' and self.approved
+        return self.role == 'user' and self.is_active
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -74,14 +88,14 @@ def load_user(user_id):
         cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user_data = cursor.fetchone()
         cursor.close()
-        
         if user_data:
             return User(
                 user_id=user_data['user_id'],
                 username=user_data['username'],
                 email=user_data['email'],
                 role=user_data['role'],
-                approved=user_data['approved']
+                approved=user_data['approved'],
+                suspended=user_data['suspended']
             )
         return None
     except Exception as e:
@@ -89,7 +103,6 @@ def load_user(user_id):
         return None
 
 # --- Database Connection ---
-
 def get_db_connection():
     """Gets a new PostgreSQL connection."""
     if 'db_conn' not in g:
@@ -121,14 +134,12 @@ def close_connection(exception):
         db_conn.close()
 
 def init_database():
-    """
-    Initializes the database with tables and sample data.
-    """
+    """Initializes the database with tables and sample data."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Create 'users' table if not exists
+
+        # Create 'users' table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id SERIAL PRIMARY KEY,
@@ -137,11 +148,12 @@ def init_database():
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'user',
             approved BOOLEAN DEFAULT FALSE,
+            suspended BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         ''')
-        
-        # Create 'products' table if not exists
+
+        # Create 'products' table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS products (
             product_id SERIAL PRIMARY KEY,
@@ -150,161 +162,202 @@ def init_database():
             price REAL,
             category TEXT,
             image_url TEXT,
-            created_by INTEGER REFERENCES users(user_id)
+            created_by INTEGER REFERENCES users(user_id) ON DELETE SET NULL
         )
         ''')
-        
-        # Create 'inventory' table if not exists
+
+        # Create 'inventory' table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS inventory (
             product_id INTEGER PRIMARY KEY,
             quantity INTEGER NOT NULL,
-            FOREIGN KEY (product_id) REFERENCES products (product_id)
+            FOREIGN KEY (product_id) REFERENCES products (product_id) ON DELETE CASCADE
+        )
+        ''')
+
+        # Create 'api_keys' table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS api_keys (
+            key_id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+            api_key TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         ''')
 
         # Check if users table is empty and create admin user
         cursor.execute("SELECT COUNT(*) FROM users")
         user_count = cursor.fetchone()[0]
-        
         if user_count == 0:
             print("👤 Creating admin user...")
-            admin_password_hash = generate_password_hash('admin123')
+            admin_password_hash = generate_password_hash('admin')
             cursor.execute("""
-                INSERT INTO users (username, email, password_hash, role, approved) 
-                VALUES (%s, %s, %s, %s, %s)
-            """, ('admin', 'admin@shop.com', admin_password_hash, 'admin', True))
-            
+                INSERT INTO users (username, email, password_hash, role, approved, suspended)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, ('admin', 'admin@shop.com', admin_password_hash, 'admin', True, False))
+
             # Create sample seller and user
             seller_password_hash = generate_password_hash('seller123')
             user_password_hash = generate_password_hash('user123')
-            
             cursor.execute("""
-                INSERT INTO users (username, email, password_hash, role, approved) 
-                VALUES (%s, %s, %s, %s, %s)
-            """, ('seller1', 'seller@shop.com', seller_password_hash, 'seller', True))
-            
-            cursor.execute("""
-                INSERT INTO users (username, email, password_hash, role, approved) 
-                VALUES (%s, %s, %s, %s, %s)
-            """, ('user1', 'user@shop.com', user_password_hash, 'user', True))
-
-        # Check if products table is empty
-        cursor.execute("SELECT COUNT(*) FROM products")
-        count = cursor.fetchone()[0]
-        
-        if count == 0:
-            print("📦 Inserting sample products...")
-            # Sample products
-            products_data = [
-                ('Pro Laptop', 'A 16-inch high-performance laptop for professionals.', 1200.00, 'Electronics', '/static/p1.png', 1),
-                ('Classic Coffee Mug', 'A sturdy 12oz ceramic mug, dishwasher safe.', 15.50, 'Homeware', '/static/p2.png', 1),
-                ('Wireless Mouse', 'Ergonomic mouse with 8-button layout and 2-year battery life.', 75.00, 'Electronics', '/static/p3.png', 1),
-                ('Cotton T-Shirt', '100% premium soft cotton. Pre-shrunk and tagless.', 20.00, 'Apparel', '/static/p4.png', 1),
-                ('Running Shoes', 'Lightweight and breathable. Perfect for road running.', 89.99, 'Apparel', '/static/p5.png', 1)
-            ]
-            
-            cursor.executemany("""
-                INSERT INTO products (name, description, price, category, image_url, created_by) 
+                INSERT INTO users (username, email, password_hash, role, approved, suspended)
                 VALUES (%s, %s, %s, %s, %s, %s)
-            """, products_data)
-            
-            # Get the new product IDs
-            cursor.execute("SELECT product_id FROM products ORDER BY product_id ASC;")
-            product_ids = [row[0] for row in cursor.fetchall()]
+            """, ('seller1', 'seller@shop.com', seller_password_hash, 'seller', True, False))
+            cursor.execute("""
+                INSERT INTO users (username, email, password_hash, role, approved, suspended)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, ('user1', 'user@shop.com', user_password_hash, 'user', True, False))
 
-            # Sample inventory
-            inventory_data = [
-                (product_ids[0], 5),
-                (product_ids[1], 100),
-                (product_ids[2], 0),
-                (product_ids[3], 20),
-                (product_ids[4], 9)
-            ]
-            cursor.executemany("INSERT INTO inventory (product_id, quantity) VALUES (%s, %s)", inventory_data)
-            
-            conn.commit()
-            print("✅ Database initialized with sample data")
-        else:
-            print("✅ Database already contains data")
-            
+            # Check if products table is empty
+            cursor.execute("SELECT COUNT(*) FROM products")
+            count = cursor.fetchone()[0]
+            if count == 0:
+                print("📦 Inserting sample products...")
+                products_data = [
+                    ('Pro Laptop', 'A 16-inch high-performance laptop for professionals.', 1200.00, 'Electronics', '/static/p1.png', 1),
+                    ('Classic Coffee Mug', 'A sturdy 12oz ceramic mug, dishwasher safe.', 15.50, 'Homeware', '/static/p2.png', 1),
+                    ('Wireless Mouse', 'Ergonomic mouse with 8-button layout and 2-year battery life.', 75.00, 'Electronics', '/static/p3.png', 1),
+                    ('Cotton T-Shirt', '100% premium soft cotton. Pre-shrunk and tagless.', 20.00, 'Apparel', '/static/p4.png', 1),
+                    ('Running Shoes', 'Lightweight and breathable. Perfect for road running.', 89.99, 'Apparel', '/static/p5.png', 1)
+                ]
+                cursor.executemany("""
+                    INSERT INTO products (name, description, price, category, image_url, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, products_data)
+
+                # Get the new product IDs
+                cursor.execute("SELECT product_id FROM products ORDER BY product_id ASC;")
+                product_ids = [row[0] for row in cursor.fetchall()]
+
+                # Sample inventory
+                inventory_data = [
+                    (product_ids[0], 5),
+                    (product_ids[1], 100),
+                    (product_ids[2], 0),
+                    (product_ids[3], 20),
+                    (product_ids[4], 9)
+                ]
+                cursor.executemany("INSERT INTO inventory (product_id, quantity) VALUES (%s, %s)", inventory_data)
+
+        conn.commit()
+        print("✅ Database initialized with sample data")
         cursor.close()
-        
     except Exception as e:
+        conn.rollback()
         print(f"❌ Database initialization failed: {e}")
 
-# Initialize database and upload folder when app starts
+# Initialize database when app starts
 with app.app_context():
     try:
         init_database()
-        ensure_upload_folder()
     except Exception as e:
         print(f"❌ Initial setup failed: {e}")
 
-# Health check endpoint
+# --- API Key Validation Functions ---
+def validate_api_key(api_key):
+    """Validate API key and return user info"""
+    if not api_key:
+        return None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT u.user_id, u.username, u.email, u.role, u.approved, u.suspended
+            FROM api_keys k
+            JOIN users u ON k.user_id = u.user_id
+            WHERE k.api_key = %s AND u.approved = TRUE AND u.suspended = FALSE
+        """, (api_key,))
+        user_data = cursor.fetchone()
+        cursor.close()
+        if user_data:
+            return {
+                'user_id': user_data['user_id'],
+                'username': user_data['username'],
+                'email': user_data['email'],
+                'role': user_data['role'],
+                'approved': user_data['approved'],
+                'suspended': user_data['suspended']
+            }
+        return None
+    except Exception as e:
+        print(f"API key validation error: {e}")
+        return None
+
+# --- API Authentication Decorators ---
+from functools import wraps
+
+def api_key_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        if not api_key:
+            return jsonify({"error": "API key required"}), 401
+        user_info = validate_api_key(api_key)
+        if not user_info:
+            return jsonify({"error": "Invalid or expired API key"}), 401
+        g.api_user = user_info
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_api_key_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        if not api_key:
+            return jsonify({"error": "API key required"}), 401
+        user_info = validate_api_key(api_key)
+        if not user_info:
+            return jsonify({"error": "Invalid or expired API key"}), 401
+        if user_info['role'] != 'admin':
+            return jsonify({"error": "Admin access required"}), 403
+        g.api_user = user_info
+        return f(*args, **kwargs)
+    return decorated_function
+
+def seller_api_key_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        if not api_key:
+            return jsonify({"error": "API key required"}), 401
+        user_info = validate_api_key(api_key)
+        if not user_info:
+            return jsonify({"error": "Invalid or expired API key"}), 401
+        if user_info['role'] not in ['admin', 'seller']:
+            return jsonify({"error": "Seller or Admin access required"}), 403
+        g.api_user = user_info
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- Health Check ---
 @app.route('/health')
-@swag_from({
-    'tags': ['System'],
-    'summary': 'Health check endpoint',
-    'description': 'Check the health status of the application and database connection',
-    'responses': {
-        200: {
-            'description': 'Application is healthy',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'status': {
-                        'type': 'string',
-                        'example': 'healthy'
-                    },
-                    'database': {
-                        'type': 'string',
-                        'example': 'connected'
-                    },
-                    'db_host': {
-                        'type': 'string',
-                        'example': '10.0.2.3'
-                    }
-                }
-            }
-        },
-        500: {
-            'description': 'Application is unhealthy',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'status': {
-                        'type': 'string',
-                        'example': 'unhealthy'
-                    },
-                    'database': {
-                        'type': 'string',
-                        'example': 'disconnected'
-                    },
-                    'error': {
-                        'type': 'string',
-                        'example': 'Connection timeout'
-                    }
-                }
-            }
-        }
-    }
-})
 def health_check():
+    """
+    Health Check
+    Checks the status of the application and database.
+    ---
+    tags:
+      - General
+    responses:
+      200:
+        description: Application is healthy.
+      500:
+        description: Application or database is unhealthy.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         cursor.close()
         return jsonify({
-            "status": "healthy", 
+            "status": "healthy",
             "database": "connected",
             "db_host": os.environ.get('DB_HOST', 'Not set')
         }), 200
     except Exception as e:
         return jsonify({
-            "status": "unhealthy", 
-            "database": "disconnected", 
+            "status": "unhealthy",
+            "database": "disconnected",
             "error": str(e)
         }), 500
 
@@ -313,253 +366,178 @@ def health_check():
 def serve_index():
     return send_from_directory('.', 'index.html')
 
-@app.route('/admin')
+@app.route('/admin/users')
 @login_required
-def serve_admin():
+def serve_admin_users():
     if not current_user.is_admin():
-        return redirect(url_for('serve_index'))
-    return send_from_directory('.', 'admin.html')
+        return jsonify({"error": "Admin access required"}), 403
+    return send_from_directory('.', 'admin-users.html')
+
+@app.route('/admin/products')
+@login_required
+def serve_admin_products():
+    if not (current_user.is_admin() or current_user.is_seller()):
+        return jsonify({"error": "Admin or Seller access required"}), 403
+    return send_from_directory('.', 'admin-products.html')
+
+@app.route('/admin/keys')
+@login_required
+def serve_admin_keys():
+    if not current_user.is_admin():
+        return jsonify({"error": "Admin access required"}), 403
+    return send_from_directory('.', 'admin-keys.html')
+
+@app.route('/swagger')
+@login_required
+def redirect_to_swagger_ui():
+    """
+    Redirect to Swagger UI
+    Redirects the base /swagger URL to the actual UI page.
+    ---
+    tags:
+      - General
+    security:
+      - cookieAuth: []
+    responses:
+      302:
+        description: Redirects to the /swagger/apidocs/ page.
+      403:
+        description: Admin access required (handled by before_request).
+    """
+    return redirect('/swagger/apidocs/')
+
+# Serve static files
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('static', filename)
 
 # --- Authentication Endpoints ---
 @app.route('/api/register', methods=['POST'])
-@swag_from({
-    'tags': ['Authentication'],
-    'summary': 'Register a new user',
-    'description': 'Create a new user account with username, email, and password',
-    'parameters': [
-        {
-            'name': 'body',
-            'in': 'body',
-            'required': True,
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'username': {
-                        'type': 'string',
-                        'description': 'Unique username',
-                        'example': 'john_doe'
-                    },
-                    'email': {
-                        'type': 'string',
-                        'format': 'email',
-                        'description': 'Valid email address',
-                        'example': 'john@example.com'
-                    },
-                    'password': {
-                        'type': 'string',
-                        'description': 'Password (min 6 characters)',
-                        'example': 'password123'
-                    },
-                    'role': {
-                        'type': 'string',
-                        'description': 'User role (user, seller, admin)',
-                        'default': 'user',
-                        'example': 'user'
-                    }
-                },
-                'required': ['username', 'email', 'password']
-            }
-        }
-    ],
-    'responses': {
-        201: {
-            'description': 'User registered successfully',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'User registered successfully'
-                    },
-                    'user_id': {
-                        'type': 'integer',
-                        'example': 4
-                    },
-                    'needs_approval': {
-                        'type': 'boolean',
-                        'example': False
-                    }
-                }
-            }
-        },
-        400: {
-            'description': 'Missing required fields or username/email already exists',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Missing required fields'
-                    }
-                }
-            }
-        }
-    }
-})
 def register():
+    """
+    Register a new user
+    Creates a new user account. Seller accounts require approval.
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            username:
+              type: string
+            email:
+              type: string
+            password:
+              type: string
+            role:
+              type: string
+              enum: ['user', 'seller']
+    responses:
+      201:
+        description: User registered successfully.
+      400:
+        description: Missing fields or user already exists.
+    """
     try:
         data = request.get_json()
-        
         if not data or not all(k in data for k in ['username', 'email', 'password']):
             return jsonify({"error": "Missing required fields"}), 400
-        
+
         username = data['username']
         email = data['email']
         password = data['password']
-        role = data.get('role', 'user')  # Default role is 'user'
-        
+        role = data.get('role', 'user')
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Check if username or email already exists
         cursor.execute("SELECT user_id FROM users WHERE username = %s OR email = %s", (username, email))
         if cursor.fetchone():
             cursor.close()
             return jsonify({"error": "Username or email already exists"}), 400
-        
-        # Hash password and create user
+
         password_hash = generate_password_hash(password)
-        
-        # New users (except admin) need approval
         approved = False
         if role == 'user':
-            approved = True  # Regular users are auto-approved
-        
+            approved = True
+
         cursor.execute("""
-            INSERT INTO users (username, email, password_hash, role, approved) 
-            VALUES (%s, %s, %s, %s, %s) RETURNING user_id
-        """, (username, email, password_hash, role, approved))
-        
+            INSERT INTO users (username, email, password_hash, role, approved, suspended)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING user_id
+        """, (username, email, password_hash, role, approved, False))
         user_id = cursor.fetchone()[0]
         conn.commit()
         cursor.close()
-        
+
         return jsonify({
-            "message": "User registered successfully", 
+            "message": "User registered successfully",
             "user_id": user_id,
             "needs_approval": not approved
         }), 201
-        
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/login', methods=['POST'])
-@swag_from({
-    'tags': ['Authentication'],
-    'summary': 'Login to existing account',
-    'description': 'Authenticate with username and password',
-    'parameters': [
-        {
-            'name': 'body',
-            'in': 'body',
-            'required': True,
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'username': {
-                        'type': 'string',
-                        'description': 'Registered username',
-                        'example': 'john_doe'
-                    },
-                    'password': {
-                        'type': 'string',
-                        'description': 'Account password',
-                        'example': 'password123'
-                    }
-                },
-                'required': ['username', 'password']
-            }
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'Login successful',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'Login successful'
-                    },
-                    'user': {
-                        'type': 'object',
-                        'properties': {
-                            'user_id': {
-                                'type': 'integer',
-                                'example': 1
-                            },
-                            'username': {
-                                'type': 'string',
-                                'example': 'admin'
-                            },
-                            'email': {
-                                'type': 'string',
-                                'example': 'admin@shop.com'
-                            },
-                            'role': {
-                                'type': 'string',
-                                'example': 'admin'
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        401: {
-            'description': 'Invalid credentials',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Invalid username or password'
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Account not approved',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Account pending approval'
-                    }
-                }
-            }
-        }
-    }
-})
 def login():
+    """
+    Log in
+    Logs in a user and creates a session cookie.
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            username:
+              type: string
+            password:
+              type: string
+    responses:
+      200:
+        description: Login successful.
+      401:
+        description: Invalid username or password.
+      403:
+        description: Account pending approval or suspended.
+    """
     try:
         data = request.get_json()
-        
         if not data or not all(k in data for k in ['username', 'password']):
             return jsonify({"error": "Missing username or password"}), 400
-        
+
         username = data['username']
         password = data['password']
-        
+
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
         cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
         user_data = cursor.fetchone()
         cursor.close()
-        
+
         if user_data and check_password_hash(user_data['password_hash'], password):
-            if not user_data['approved']:
-                return jsonify({"error": "Account pending approval"}), 403
-                
             user = User(
                 user_id=user_data['user_id'],
                 username=user_data['username'],
                 email=user_data['email'],
                 role=user_data['role'],
-                approved=user_data['approved']
+                approved=user_data['approved'],
+                suspended=user_data['suspended']
             )
+
+            if not user.is_active:
+                error_msg = "Account pending approval"
+                if user.suspended:
+                    error_msg = "Account has been suspended"
+                elif not user.approved:
+                    error_msg = "Account pending approval"
+                return jsonify({"error": error_msg}), 403
+
             login_user(user)
             return jsonify({
                 "message": "Login successful",
@@ -572,69 +550,42 @@ def login():
             }), 200
         else:
             return jsonify({"error": "Invalid username or password"}), 401
-            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/logout', methods=['POST'])
-@swag_from({
-    'tags': ['Authentication'],
-    'summary': 'Logout from current session',
-    'description': 'End the current user session',
-    'responses': {
-        200: {
-            'description': 'Logout successful',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'Logout successful'
-                    }
-                }
-            }
-        }
-    }
-})
 @login_required
 def logout():
+    """
+    Log out
+    Clears the user's session.
+    ---
+    tags:
+      - Authentication
+    security:
+      - cookieAuth: []
+    responses:
+      200:
+        description: Logout successful.
+    """
     logout_user()
     return jsonify({"message": "Logout successful"}), 200
 
 @app.route('/api/user')
-@swag_from({
-    'tags': ['Authentication'],
-    'summary': 'Get current user information',
-    'description': 'Retrieve details about the currently authenticated user',
-    'responses': {
-        200: {
-            'description': 'User details',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'user_id': {
-                        'type': 'integer',
-                        'example': 1
-                    },
-                    'username': {
-                        'type': 'string',
-                        'example': 'admin'
-                    },
-                    'email': {
-                        'type': 'string',
-                        'example': 'admin@shop.com'
-                    },
-                    'role': {
-                        'type': 'string',
-                        'example': 'admin'
-                    }
-                }
-            }
-        }
-    }
-})
 @login_required
 def get_current_user():
+    """
+    Get Current User
+    Returns the details of the currently logged-in user.
+    ---
+    tags:
+      - Authentication
+    security:
+      - cookieAuth: []
+    responses:
+      200:
+        description: User details.
+    """
     return jsonify({
         "user_id": current_user.id,
         "username": current_user.username,
@@ -642,517 +593,563 @@ def get_current_user():
         "role": current_user.role
     }), 200
 
-# --- User Management Endpoints (Admin only) ---
-@app.route('/api/admin/users', methods=['GET'])
-@swag_from({
-    'tags': ['User Management'],
-    'summary': 'List all users',
-    'description': 'Retrieve a list of all users in the system (admin only)',
-    'responses': {
-        200: {
-            'description': 'List of users',
-            'schema': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'user_id': {
-                            'type': 'integer',
-                            'example': 1
-                        },
-                        'username': {
-                            'type': 'string',
-                            'example': 'admin'
-                        },
-                        'email': {
-                            'type': 'string',
-                            'example': 'admin@shop.com'
-                        },
-                        'role': {
-                            'type': 'string',
-                            'example': 'admin'
-                        },
-                        'approved': {
-                            'type': 'boolean',
-                            'example': True
-                        },
-                        'created_at': {
-                            'type': 'string',
-                            'format': 'date-time',
-                            'example': '2023-10-15T12:34:56Z'
-                        }
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Admin access required',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Admin access required'
-                    }
-                }
-            }
-        }
-    }
-})
+# --- User API Key Management ---
+@app.route('/api/user/keys', methods=['GET'])
 @login_required
-def get_users():
-    if not current_user.is_admin():
-        return jsonify({"error": "Admin access required"}), 403
-    
+def get_user_api_keys():
+    """
+    Get Current User's API Keys
+    Returns the API keys for the currently logged-in user.
+    ---
+    tags:
+      - Authentication
+    security:
+      - cookieAuth: []
+    responses:
+      200:
+        description: List of user's API keys.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
         cursor.execute("""
-            SELECT user_id, username, email, role, approved, created_at 
+            SELECT key_id, api_key, created_at
+            FROM api_keys
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """, (current_user.id,))
+        keys = cursor.fetchall()
+        cursor.close()
+        return jsonify(keys)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/user/keys', methods=['POST'])
+@login_required
+def create_user_api_key():
+    """
+    Create API Key for Current User
+    Creates a new API key for the currently logged-in user.
+    ---
+    tags:
+      - Authentication
+    security:
+      - cookieAuth: []
+    responses:
+      201:
+        description: API key created successfully.
+    """
+    try:
+        new_key = f"sk_{uuid.uuid4().hex}"
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO api_keys (user_id, api_key) VALUES (%s, %s)",
+            (current_user.id, new_key)
+        )
+        conn.commit()
+        cursor.close()
+        return jsonify({
+            "message": "API key created successfully",
+            "api_key": new_key
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+# --- User Management Endpoints (Admin only) ---
+@app.route('/api/admin/users', methods=['GET'])
+@api_key_required
+@admin_api_key_required
+def get_users():
+    """
+    Get All Users (Admin)
+    Retrieves a list of all users in the system.
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      200:
+        description: A list of users.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT user_id, username, email, role, approved, suspended, created_at
             FROM users ORDER BY created_at DESC
         """)
         users = cursor.fetchall()
         cursor.close()
-        
         return jsonify(users)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/users/<int:user_id>/approve', methods=['POST'])
-@swag_from({
-    'tags': ['User Management'],
-    'summary': 'Approve a user account',
-    'description': 'Approve a user account that is pending approval (admin only)',
-    'parameters': [
-        {
-            'name': 'user_id',
-            'in': 'path',
-            'type': 'integer',
-            'required': True,
-            'description': 'ID of the user to approve',
-            'example': 2
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'User approved successfully',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'User approved successfully'
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Admin access required',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Admin access required'
-                    }
-                }
-            }
-        }
-    }
-})
-@login_required
+@api_key_required
+@admin_api_key_required
 def approve_user(user_id):
-    if not current_user.is_admin():
-        return jsonify({"error": "Admin access required"}), 403
-    
+    """
+    Approve User (Admin)
+    Approves a pending user account (e.g., a seller).
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      200:
+        description: User approved successfully.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute("UPDATE users SET approved = TRUE WHERE user_id = %s", (user_id,))
         conn.commit()
         cursor.close()
-        
         return jsonify({"message": "User approved successfully"}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/users/<int:user_id>/role', methods=['PUT'])
-@swag_from({
-    'tags': ['User Management'],
-    'summary': 'Update user role',
-    'description': 'Change a user\'s role (admin only)',
-    'parameters': [
-        {
-            'name': 'user_id',
-            'in': 'path',
-            'type': 'integer',
-            'required': True,
-            'description': 'ID of the user to update',
-            'example': 2
-        },
-        {
-            'name': 'body',
-            'in': 'body',
-            'required': True,
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'role': {
-                        'type': 'string',
-                        'description': 'New role for the user',
-                        'enum': ['user', 'seller', 'admin'],
-                        'example': 'seller'
-                    }
-                },
-                'required': ['role']
-            }
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'User role updated successfully',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'User role updated successfully'
-                    }
-                }
-            }
-        },
-        400: {
-            'description': 'Invalid role specified',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Invalid role'
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Admin access required',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Admin access required'
-                    }
-                }
-            }
-        }
-    }
-})
-@login_required
+@api_key_required
+@admin_api_key_required
 def update_user_role(user_id):
-    if not current_user.is_admin():
-        return jsonify({"error": "Admin access required"}), 403
-    
+    """
+    Update User Role (Admin)
+    Changes the role of a user (user, seller, admin).
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            role:
+              type: string
+              enum: ['user', 'seller', 'admin']
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      200:
+        description: User role updated successfully.
+      400:
+        description: Invalid role.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
     try:
         data = request.get_json()
         new_role = data.get('role')
-        
         if new_role not in ['user', 'seller', 'admin']:
             return jsonify({"error": "Invalid role"}), 400
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute("UPDATE users SET role = %s WHERE user_id = %s", (new_role, user_id))
         conn.commit()
         cursor.close()
-        
         return jsonify({"message": "User role updated successfully"}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
-@swag_from({
-    'tags': ['User Management'],
-    'summary': 'Delete a user account',
-    'description': 'Delete a user account (admin only). Cannot delete users who have created products or your own account.',
-    'parameters': [
-        {
-            'name': 'user_id',
-            'in': 'path',
-            'type': 'integer',
-            'required': True,
-            'description': 'ID of the user to delete',
-            'example': 2
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'User deleted successfully',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'User deleted successfully'
-                    }
-                }
-            }
-        },
-        400: {
-            'description': 'Cannot delete user with products or self',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Cannot delete user who has created products'
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Admin access required',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Admin access required'
-                    }
-                }
-            }
-        },
-        404: {
-            'description': 'User not found',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'User not found'
-                    }
-                }
-            }
-        }
-    }
-})
-@login_required
-def delete_user(user_id):
-    if not current_user.is_admin():
-        return jsonify({"error": "Admin access required"}), 403
-    
+@app.route('/api/admin/users/<int:user_id>/suspend', methods=['POST'])
+@api_key_required
+@admin_api_key_required
+def suspend_user(user_id):
+    """
+    Suspend User (Admin)
+    Suspends a user's account, preventing login.
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      200:
+        description: User suspended successfully.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Check if user exists
-        cursor.execute("SELECT 1 FROM users WHERE user_id = %s", (user_id,))
-        if not cursor.fetchone():
-            return jsonify({"error": "User not found"}), 404
-        
-        # Check if user has created any products (prevent deletion if they have)
-        cursor.execute("SELECT 1 FROM products WHERE created_by = %s LIMIT 1", (user_id,))
-        if cursor.fetchone():
-            return jsonify({"error": "Cannot delete user who has created products"}), 400
-        
-        # Prevent admin from deleting themselves
-        if user_id == current_user.id:
-            return jsonify({"error": "Cannot delete your own account"}), 400
-            
-        # Delete the user
-        cursor.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+        cursor.execute("UPDATE users SET suspended = TRUE WHERE user_id = %s", (user_id,))
         conn.commit()
         cursor.close()
-        
-        return jsonify({"message": "User deleted successfully"}), 200
-        
+        return jsonify({"message": "User suspended successfully"}), 200
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
-# --- Image Upload Endpoint ---
-@app.route('/api/admin/upload', methods=['POST'])
-@swag_from({
-    'tags': ['Product Management'],
-    'summary': 'Upload product image',
-    'description': 'Upload an image for product (admin or approved sellers only)',
-    'parameters': [
-        {
-            'name': 'image',
-            'in': 'formData',
-            'type': 'file',
-            'required': True,
-            'description': 'Image file to upload (PNG, JPG, JPEG, GIF, WEBP)'
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'Image uploaded successfully',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'Image uploaded successfully'
-                    },
-                    'image_url': {
-                        'type': 'string',
-                        'example': '/static/uploads/abcd1234_product.jpg'
-                    }
-                }
-            }
-        },
-        400: {
-            'description': 'Invalid file or no file provided',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'No file part'
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Access denied (not admin or seller)',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Access denied'
-                    }
-                }
-            }
-        }
-    }
-})
-@login_required
-def upload_image():
-    # Only allow admin and approved sellers to upload images
-    if not (current_user.is_admin() or current_user.is_seller()):
-        return jsonify({"error": "Access denied"}), 403
-    
+@app.route('/api/admin/users/<int:user_id>/activate', methods=['POST'])
+@api_key_required
+@admin_api_key_required
+def activate_user(user_id):
+    """
+    Activate User (Admin)
+    Activates (un-suspends) a user's account.
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      200:
+        description: User activated successfully.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
     try:
-        # Check if the post request has the file part
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET suspended = FALSE WHERE user_id = %s", (user_id,))
+        conn.commit()
+        cursor.close()
+        return jsonify({"message": "User activated successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@api_key_required
+@admin_api_key_required
+def delete_user(user_id):
+    """
+    Delete User (Admin)
+    Permanently deletes a user account.
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: path
+        name: user_id
+        type: integer
+        required: true
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      200:
+        description: User deleted successfully.
+      400:
+        description: Cannot delete your own account.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
+    if user_id == g.api_user['user_id']:
+        return jsonify({"error": "Cannot delete your own account"}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+        conn.commit()
+        cursor.close()
+        return jsonify({"message": "User deleted successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+# --- API Key Management Endpoints (Admin only) ---
+@app.route('/api/admin/keys', methods=['GET'])
+@api_key_required
+@admin_api_key_required
+def get_api_keys():
+    """
+    Get All API Keys (Admin)
+    Retrieves a list of all API keys.
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      200:
+        description: A list of API keys.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("""
+            SELECT k.key_id, k.api_key, k.created_at, u.username
+            FROM api_keys k
+            JOIN users u ON k.user_id = u.user_id
+            ORDER BY k.created_at DESC
+        """)
+        keys = cursor.fetchall()
+        cursor.close()
+        return jsonify(keys)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/keys', methods=['POST'])
+@api_key_required
+@admin_api_key_required
+def create_api_key():
+    """
+    Create API Key (Admin)
+    Creates a new API key for a specified user.
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            user_id:
+              type: integer
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      201:
+        description: API key created successfully.
+      400:
+        description: User ID is required.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        if not user_id:
+            return jsonify({"error": "User ID is required"}), 400
+
+        new_key = f"sk_{uuid.uuid4().hex}"
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO api_keys (user_id, api_key) VALUES (%s, %s)",
+            (user_id, new_key)
+        )
+        conn.commit()
+        cursor.close()
+        return jsonify({
+            "message": "API key created successfully",
+            "api_key": new_key
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/admin/keys/<int:key_id>', methods=['DELETE'])
+@api_key_required
+@admin_api_key_required
+def delete_api_key(key_id):
+    """
+    Delete API Key (Admin)
+    Permanently deletes an API key.
+    ---
+    tags:
+      - User Management
+    parameters:
+      - in: path
+        name: key_id
+        type: integer
+        required: true
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+    responses:
+      200:
+        description: API key deleted successfully.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM api_keys WHERE key_id = %s", (key_id,))
+        conn.commit()
+        cursor.close()
+        return jsonify({"message": "API key deleted successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+# --- Image Upload Endpoint (GCP Cloud Storage) ---
+@app.route('/api/admin/upload', methods=['POST'])
+@api_key_required
+@seller_api_key_required
+def upload_image():
+    """
+    Upload Image (Admin/Seller)
+    Uploads a product image to Google Cloud Storage and returns the URL.
+    ---
+    tags:
+      - Product Management
+    parameters:
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+      - in: formData
+        name: image
+        type: file
+        required: true
+        description: The image file to upload.
+    responses:
+      200:
+        description: Image uploaded successfully.
+      400:
+        description: No file part or file type not allowed.
+      401:
+        description: API key required.
+      403:
+        description: Access denied.
+    """
+    try:
         if 'image' not in request.files:
             return jsonify({"error": "No file part"}), 400
-        
+
         file = request.files['image']
-        
-        # If user does not select file, browser also submits an empty part without filename
         if file.filename == '':
             return jsonify({"error": "No selected file"}), 400
-        
+
         if file and allowed_file(file.filename):
-            # Generate unique filename to prevent overwriting
+            # Initialize Google Cloud Storage client
+            storage_client = get_storage_client()
+            bucket = storage_client.bucket(app.config['UPLOAD_BUCKET'])
+            
+            # Generate unique filename
             filename = secure_filename(file.filename)
             unique_filename = f"{uuid.uuid4().hex}_{filename}"
+            blob = bucket.blob(f"uploads/{unique_filename}")
             
-            # Ensure upload folder exists
-            ensure_upload_folder()
+            # Upload file to GCS
+            blob.upload_from_string(
+                file.read(),
+                content_type=file.content_type
+            )
             
-            # Save file
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-            file.save(file_path)
+            # Make the blob publicly accessible
+            blob.make_public()
             
-            # Return the URL path for the saved image
-            image_url = f"/static/uploads/{unique_filename}"
+            image_url = blob.public_url
+            
             return jsonify({
                 "message": "Image uploaded successfully",
                 "image_url": image_url
             }), 200
         else:
             return jsonify({"error": "File type not allowed. Please upload PNG, JPG, JPEG, GIF, or WEBP."}), 400
-            
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 # --- API Endpoints ---
 @app.route('/api/products', methods=['GET'])
-@swag_from({
-    'tags': ['Product Management'],
-    'summary': 'Get all products',
-    'description': 'Retrieve all products with optional search filtering',
-    'parameters': [
-        {
-            'name': 'search',
-            'in': 'query',
-            'type': 'string',
-            'description': 'Filter products by name or description',
-            'example': 'laptop'
-        },
-        {
-            'name': 'admin',
-            'in': 'query',
-            'type': 'string',
-            'description': 'Set to "true" to include inventory quantities',
-            'example': 'true'
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'List of products',
-            'schema': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'product_id': {
-                            'type': 'integer',
-                            'example': 1
-                        },
-                        'name': {
-                            'type': 'string',
-                            'example': 'Pro Laptop'
-                        },
-                        'description': {
-                            'type': 'string',
-                            'example': 'A 16-inch high-performance laptop for professionals.'
-                        },
-                        'price': {
-                            'type': 'number',
-                            'format': 'float',
-                            'example': 1200.00
-                        },
-                        'category': {
-                            'type': 'string',
-                            'example': 'Electronics'
-                        },
-                        'image_url': {
-                            'type': 'string',
-                            'example': '/static/p1.png'
-                        },
-                        'quantity': {
-                            'type': 'integer',
-                            'example': 5
-                        },
-                        'stock_status': {
-                            'type': 'string',
-                            'example': 'In Stock'
-                        }
-                    }
-                }
-            }
-        }
-    }
-})
 def get_products():
+    """
+    Get All Products
+    Retrieves all products, with optional search.
+    ---
+    tags:
+      - Products
+    parameters:
+      - in: query
+        name: search
+        type: string
+        description: Filter products by name or description.
+      - in: query
+        name: admin
+        type: boolean
+        description: If true, returns stock quantity (requires API key).
+      - in: header
+        name: X-API-Key
+        type: string
+        required: false
+        description: API key for admin mode access
+    responses:
+      200:
+        description: A list of products.
+      401:
+        description: API key required for admin mode.
+    """
     try:
-        search_term = request.args.get('search', '') 
+        search_term = request.args.get('search', '')
         admin_mode = request.args.get('admin', 'false').lower() == 'true'
-        
+
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        user_info = validate_api_key(api_key) if api_key else None
+
+        if admin_mode and not user_info:
+            return jsonify({"error": "API key required for admin mode"}), 401
+
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
         query = """
             SELECT
-                p.product_id, p.name, p.description, p.price, p.category, 
+                p.product_id, p.name, p.description, p.price, p.category,
                 p.image_url, i.quantity,
                 CASE
                     WHEN i.quantity = 0 THEN 'Out of Stock'
@@ -1162,475 +1159,229 @@ def get_products():
             FROM products p
             JOIN inventory i ON p.product_id = i.product_id
         """
-        
         params = []
         if search_term:
             query += " WHERE p.name ILIKE %s OR p.description ILIKE %s"
             params.extend([f'%{search_term}%', f'%{search_term}%'])
-        
+
         cursor.execute(query, params)
         products = cursor.fetchall()
         cursor.close()
-        
-        # If not in admin mode, remove quantity field for security
-        if not admin_mode:
+
+        if not admin_mode or not user_info:
             for product in products:
                 if 'quantity' in product:
                     del product['quantity']
-        
+
         return jsonify(products)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/products/<int:product_id>/related', methods=['GET'])
-@swag_from({
-    'tags': ['Product Management'],
-    'summary': 'Get related products',
-    'description': 'Get products from the same category as the specified product',
-    'parameters': [
-        {
-            'name': 'product_id',
-            'in': 'path',
-            'type': 'integer',
-            'required': True,
-            'description': 'ID of the product to find related products for',
-            'example': 1
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'List of related products',
-            'schema': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'product_id': {
-                            'type': 'integer',
-                            'example': 2
-                        },
-                        'name': {
-                            'type': 'string',
-                            'example': 'Wireless Mouse'
-                        },
-                        'price': {
-                            'type': 'number',
-                            'format': 'float',
-                            'example': 75.00
-                        },
-                        'category': {
-                            'type': 'string',
-                            'example': 'Electronics'
-                        },
-                        'image_url': {
-                            'type': 'string',
-                            'example': '/static/p3.png'
-                        }
-                    }
-                }
-            }
-        },
-        404: {
-            'description': 'Product not found',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Product not found'
-                    }
-                }
-            }
-        }
-    }
-})
 def get_related_products(product_id):
+    """
+    Get Related Products
+    Retrieves 3 related products from the same category.
+    ---
+    tags:
+      - Products
+    parameters:
+      - in: path
+        name: product_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: A list of related products.
+      404:
+        description: Product not found.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
         cursor.execute("SELECT category FROM products WHERE product_id = %s", (product_id,))
         product = cursor.fetchone()
-        
         if not product:
             return jsonify({"error": "Product not found"}), 404
 
         current_category = product['category']
-        
         cursor.execute("""
-            SELECT product_id, name, price, category, image_url 
-            FROM products 
+            SELECT product_id, name, price, category, image_url
+            FROM products
             WHERE category = %s AND product_id != %s LIMIT 3
         """, (current_category, product_id))
         related = cursor.fetchall()
-        
         cursor.close()
         return jsonify(related)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- Admin API Endpoints ---
+# --- Product Management API Endpoints (Admin / Seller) ---
 @app.route('/api/admin/products', methods=['POST'])
-@swag_from({
-    'tags': ['Product Management'],
-    'summary': 'Create a new product',
-    'description': 'Create a new product (admin or approved sellers only)',
-    'parameters': [
-        {
-            'name': 'body',
-            'in': 'body',
-            'required': True,
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'name': {
-                        'type': 'string',
-                        'description': 'Product name',
-                        'example': 'New Product'
-                    },
-                    'description': {
-                        'type': 'string',
-                        'description': 'Product description',
-                        'example': 'Product description'
-                    },
-                    'price': {
-                        'type': 'number',
-                        'format': 'float',
-                        'description': 'Product price',
-                        'example': 99.99
-                    },
-                    'category': {
-                        'type': 'string',
-                        'description': 'Product category',
-                        'example': 'Electronics'
-                    },
-                    'image_url': {
-                        'type': 'string',
-                        'description': 'URL of product image',
-                        'example': '/static/new-product.png'
-                    },
-                    'quantity': {
-                        'type': 'integer',
-                        'description': 'Initial stock quantity',
-                        'example': 10
-                    }
-                },
-                'required': ['name', 'price', 'category', 'quantity']
-            }
-        }
-    ],
-    'responses': {
-        201: {
-            'description': 'Product created successfully',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'Product created successfully'
-                    },
-                    'product_id': {
-                        'type': 'integer',
-                        'example': 6
-                    }
-                }
-            }
-        },
-        400: {
-            'description': 'Missing required fields',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Missing required fields'
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Access denied (not admin or seller)',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Access denied'
-                    }
-                }
-            }
-        }
-    }
-})
-@login_required
+@api_key_required
+@seller_api_key_required
 def create_product():
-    # Only allow admin and approved sellers to create products
-    if not (current_user.is_admin() or current_user.is_seller()):
-        return jsonify({"error": "Access denied"}), 403
-    
+    """
+    Create Product (Admin/Seller)
+    Adds a new product to the database.
+    ---
+    tags:
+      - Product Management
+    parameters:
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            name: { type: string }
+            description: { type: string }
+            price: { type: number }
+            category: { type: string }
+            quantity: { type: integer }
+            image_url: { type: string }
+    responses:
+      201:
+        description: Product created successfully.
+      400:
+        description: Missing required fields.
+      401:
+        description: API key required.
+      403:
+        description: Access denied.
+    """
     try:
         data = request.get_json()
-        
         if not data or not all(k in data for k in ['name', 'price', 'category', 'quantity']):
             return jsonify({"error": "Missing required fields"}), 400
-        
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Use default image if none provided
         image_url = data.get('image_url', '/static/default.png')
-        
-        # Insert product
         cursor.execute("""
             INSERT INTO products (name, description, price, category, image_url, created_by)
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING product_id
-        """, (data['name'], data.get('description', ''), data['price'], 
-              data['category'], image_url, current_user.id))
-        
+        """, (data['name'], data.get('description', ''), data['price'],
+              data['category'], image_url, g.api_user['user_id']))
         product_id = cursor.fetchone()[0]
-        
-        # Insert inventory
         cursor.execute("""
             INSERT INTO inventory (product_id, quantity)
             VALUES (%s, %s)
         """, (product_id, data['quantity']))
-        
         conn.commit()
         cursor.close()
-        
         return jsonify({"message": "Product created successfully", "product_id": product_id}), 201
-        
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/products/<int:product_id>', methods=['PUT'])
-@swag_from({
-    'tags': ['Product Management'],
-    'summary': 'Update an existing product',
-    'description': 'Update product details (admin or approved sellers only)',
-    'parameters': [
-        {
-            'name': 'product_id',
-            'in': 'path',
-            'type': 'integer',
-            'required': True,
-            'description': 'ID of the product to update',
-            'example': 1
-        },
-        {
-            'name': 'body',
-            'in': 'body',
-            'required': True,
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'name': {
-                        'type': 'string',
-                        'description': 'Product name',
-                        'example': 'Updated Product'
-                    },
-                    'description': {
-                        'type': 'string',
-                        'description': 'Product description',
-                        'example': 'Updated description'
-                    },
-                    'price': {
-                        'type': 'number',
-                        'format': 'float',
-                        'description': 'Product price',
-                        'example': 89.99
-                    },
-                    'category': {
-                        'type': 'string',
-                        'description': 'Product category',
-                        'example': 'Electronics'
-                    },
-                    'image_url': {
-                        'type': 'string',
-                        'description': 'URL of product image',
-                        'example': '/static/updated-product.png'
-                    },
-                    'quantity': {
-                        'type': 'integer',
-                        'description': 'Stock quantity',
-                        'example': 15
-                    }
-                },
-                'required': ['name', 'price', 'category', 'quantity']
-            }
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'Product updated successfully',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'Product updated successfully'
-                    }
-                }
-            }
-        },
-        400: {
-            'description': 'Missing required fields',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Missing required fields'
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Access denied (not admin or seller)',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Access denied'
-                    }
-                }
-            }
-        },
-        404: {
-            'description': 'Product not found',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Product not found'
-                    }
-                }
-            }
-        }
-    }
-})
-@login_required
+@api_key_required
+@seller_api_key_required
 def update_product(product_id):
-    # Only allow admin and approved sellers to update products
-    if not (current_user.is_admin() or current_user.is_seller()):
-        return jsonify({"error": "Access denied"}), 403
-    
+    """
+    Update Product (Admin/Seller)
+    Updates an existing product.
+    ---
+    tags:
+      - Product Management
+    parameters:
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+      - in: path
+        name: product_id
+        type: integer
+        required: true
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            name: { type: string }
+            description: { type: string }
+            price: { type: number }
+            category: { type: string }
+            quantity: { type: integer }
+            image_url: { type: string }
+    responses:
+      200:
+        description: Product updated successfully.
+      401:
+        description: API key required.
+      403:
+        description: Access denied.
+      404:
+        description: Product not found.
+    """
     try:
         data = request.get_json()
-        
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Check if product exists
         cursor.execute("SELECT 1 FROM products WHERE product_id = %s", (product_id,))
         if not cursor.fetchone():
             return jsonify({"error": "Product not found"}), 404
-        
-        # Update product
+
         cursor.execute("""
-            UPDATE products 
+            UPDATE products
             SET name = %s, description = %s, price = %s, category = %s, image_url = %s
             WHERE product_id = %s
-        """, (data['name'], data.get('description', ''), data['price'], 
+        """, (data['name'], data.get('description', ''), data['price'],
               data['category'], data.get('image_url', '/static/default.png'), product_id))
-        
-        # Update inventory
         cursor.execute("""
             UPDATE inventory SET quantity = %s WHERE product_id = %s
         """, (data['quantity'], product_id))
-        
         conn.commit()
         cursor.close()
-        
         return jsonify({"message": "Product updated successfully"}), 200
-        
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/admin/products/<int:product_id>', methods=['DELETE'])
-@swag_from({
-    'tags': ['Product Management'],
-    'summary': 'Delete a product',
-    'description': 'Delete a product (admin only)',
-    'parameters': [
-        {
-            'name': 'product_id',
-            'in': 'path',
-            'type': 'integer',
-            'required': True,
-            'description': 'ID of the product to delete',
-            'example': 1
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'Product deleted successfully',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'message': {
-                        'type': 'string',
-                        'example': 'Product deleted successfully'
-                    }
-                }
-            }
-        },
-        403: {
-            'description': 'Admin access required',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Admin access required'
-                    }
-                }
-            }
-        },
-        404: {
-            'description': 'Product not found',
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'error': {
-                        'type': 'string',
-                        'example': 'Product not found'
-                    }
-                }
-            }
-        }
-    }
-})
-@login_required
+@api_key_required
+@admin_api_key_required
 def delete_product(product_id):
-    # Only allow admin to delete products
-    if not current_user.is_admin():
-        return jsonify({"error": "Admin access required"}), 403
-    
+    """
+    Delete Product (Admin)
+    Permanently deletes a product.
+    ---
+    tags:
+      - Product Management
+    parameters:
+      - in: header
+        name: X-API-Key
+        type: string
+        required: true
+      - in: path
+        name: product_id
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Product deleted successfully.
+      401:
+        description: API key required.
+      403:
+        description: Admin access required.
+      404:
+        description: Product not found.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Check if product exists
         cursor.execute("SELECT 1 FROM products WHERE product_id = %s", (product_id,))
         if not cursor.fetchone():
             return jsonify({"error": "Product not found"}), 404
-        
-        # Delete from inventory first (foreign key constraint)
-        cursor.execute("DELETE FROM inventory WHERE product_id = %s", (product_id,))
-        
-        # Delete product
+
         cursor.execute("DELETE FROM products WHERE product_id = %s", (product_id,))
-        
         conn.commit()
         cursor.close()
-        
         return jsonify({"message": "Product deleted successfully"}), 200
-        
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500

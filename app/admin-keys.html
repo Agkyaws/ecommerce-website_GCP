@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Management - CircuitCart</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/admin-auth.js"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <nav class="container max-w-7xl mx-auto p-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">API Key Management</h1>
+            <div class="flex gap-4">
+                <button id="back-to-shop" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                    Back to Shop
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container max-w-7xl mx-auto p-4 sm:p-8">
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Generate New API Key</h2>
+            <form id="generate-key-form" class="flex gap-4 items-end">
+                <div class="flex-grow">
+                    <label for="user-select" class="block text-sm font-medium text-gray-700">Select User</label>
+                    <select id="user-select" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Loading users...</option>
+                    </select>
+                </div>
+                <button type="submit" class="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                    Generate Key
+                </button>
+            </form>
+            <div id="new-key-message" class="mt-4 p-4 bg-green-100 text-green-800 rounded hidden"></div>
+        </div>
+
+        <div id="keys-section" class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Manage API Keys</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-4 py-2 text-left">User</th>
+                            <th class="px-4 py-2 text-left">API Key (Partial)</th>
+                            <th class="px-4 py-2 text-left">Created</th>
+                            <th class="px-4 py-2 text-left">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="api-keys-table">
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-gray-500">
+                                Loading keys...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('API Key Management dashboard loading.');
+
+            const backToShopBtn = document.getElementById('back-to-shop');
+            const userSelect = document.getElementById('user-select');
+            const keysTable = document.getElementById('api-keys-table');
+            const generateForm = document.getElementById('generate-key-form');
+            const newKeyMessage = document.getElementById('new-key-message');
+
+            // Initialize authentication
+            try {
+                const authSuccess = await window.adminAuth.initialize();
+                if (!authSuccess) {
+                    return;
+                }
+                
+                // Load initial data
+                await loadUsers();
+                await loadApiKeys();
+            } catch (error) {
+                console.error('Failed to initialize admin:', error);
+                keysTable.innerHTML = '<tr><td colspan="4" class="px-4 py-2 text-center text-red-500">Authentication failed. Please refresh the page.</td></tr>';
+                userSelect.innerHTML = '<option value="">Error loading users</option>';
+            }
+
+            // Navigation
+            backToShopBtn.addEventListener('click', () => {
+                window.location.href = '/';
+            });
+
+            // Load users into dropdown
+            async function loadUsers() {
+                try {
+                    const response = await window.adminAuth.get('/api/admin/users');
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to fetch users');
+                    }
+                    
+                    const users = await response.json();
+                    userSelect.innerHTML = '<option value="">Select a user</option>';
+                    
+                    users.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.user_id;
+                        option.textContent = `${user.username} (${user.email}) - ${user.role}`;
+                        userSelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading users:', error);
+                    userSelect.innerHTML = '<option value="">Error loading users: ' + error.message + '</option>';
+                }
+            }
+
+            // Load existing keys into table
+            async function loadApiKeys() {
+                try {
+                    const response = await window.adminAuth.get('/api/admin/keys');
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to fetch keys');
+                    }
+                    
+                    const keys = await response.json();
+                    keysTable.innerHTML = '';
+                    
+                    if (keys.length === 0) {
+                        keysTable.innerHTML = '<tr><td colspan="4" class="px-4 py-2 text-center text-gray-500">No API keys found</td></tr>';
+                        return;
+                    }
+
+                    keys.forEach(key => {
+                        const row = document.createElement('tr');
+                        row.className = 'border-b hover:bg-gray-50';
+                        
+                        // Show only part of the key for security
+                        const partialKey = key.api_key.substring(0, 10) + '...';
+
+                        row.innerHTML = `
+                            <td class="px-4 py-2 font-semibold">${key.username}</td>
+                            <td class="px-4 py-2 font-mono">${partialKey}</td>
+                            <td class="px-4 py-2">${new Date(key.created_at).toLocaleDateString()}</td>
+                            <td class="px-4 py-2">
+                                <button class="delete-key-btn bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors" data-key-id="${key.key_id}">
+                                    Delete
+                                </button>
+                            </td>
+                        `;
+                        keysTable.appendChild(row);
+                    });
+
+                    // Add delete listeners
+                    document.querySelectorAll('.delete-key-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => deleteKey(e.target.dataset.keyId));
+                    });
+
+                } catch (error) {
+                    console.error('Error loading keys:', error);
+                    keysTable.innerHTML = '<tr><td colspan="4" class="px-4 py-2 text-center text-red-500">Error loading keys: ' + error.message + '</td></tr>';
+                }
+            }
+            
+            // Handle key generation
+            generateForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const userId = userSelect.value;
+                if (!userId) {
+                    alert('Please select a user.');
+                    return;
+                }
+
+                try {
+                    const response = await window.adminAuth.post('/api/admin/keys', { 
+                        user_id: parseInt(userId) 
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        // Show success message with the new key
+                        newKeyMessage.innerHTML = `
+                            <strong>Success!</strong> New key generated: 
+                            <br>
+                            <pre class="mt-2 p-2 bg-gray-100 rounded overflow-x-auto">${result.api_key}</pre>
+                            <p class="mt-2 text-sm">Please copy this key now. You will not be able to see it again.</p>
+                        `;
+                        newKeyMessage.classList.remove('hidden');
+                        
+                        // Hide the message after 15 seconds
+                        setTimeout(() => {
+                            newKeyMessage.classList.add('hidden');
+                        }, 15000);
+
+                        generateForm.reset();
+                        await loadApiKeys(); // Reload the table
+                    } else {
+                        const err = await response.json();
+                        alert(`Failed to generate key: ${err.error || 'Unknown error'}`);
+                    }
+                } catch (error) {
+                    console.error('Error generating key:', error);
+                    alert('Error generating key: ' + error.message);
+                }
+            });
+
+            // Handle key deletion
+            async function deleteKey(keyId) {
+                if (!confirm('Are you sure you want to DELETE this API key? This cannot be undone.')) return;
+
+                try {
+                    const response = await window.adminAuth.delete(`/api/admin/keys/${keyId}`);
+
+                    if (response.ok) {
+                        await loadApiKeys(); // Reload the table
+                    } else {
+                        const err = await response.json();
+                        alert(`Failed to delete key: ${err.error || 'Unknown error'}`);
+                    }
+                } catch (error) {
+                    console.error('Error deleting key:', error);
+                    alert('Error deleting key: ' + error.message);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

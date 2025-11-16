@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - CircuitCart</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/admin-auth.js"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <nav class="container max-w-7xl mx-auto p-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">User Management</h1>
+            <div class="flex gap-4">
+                <button id="back-to-shop" class="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                    Back to Shop
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container max-w-7xl mx-auto p-4 sm:p-8">
+        <div id="users-section" class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Manage Users</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full table-auto">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="px-4 py-2 text-left">Username</th>
+                            <th class="px-4 py-2 text-left">Email</th>
+                            <th class="px-4 py-2 text-left">Role</th>
+                            <th class="px-4 py-2 text-left">Status</th>
+                            <th class="px-4 py-2 text-left">Created</th>
+                            <th class="px-4 py-2 text-left">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-users-table">
+                        <tr>
+                            <td colspan="6" class="px-4 py-2 text-center text-gray-500">
+                                Loading users...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('User Management dashboard loading...');
+
+            const backToShopBtn = document.getElementById('back-to-shop');
+            const usersTable = document.getElementById('admin-users-table');
+            
+            let allUsers = [];
+
+            // Navigation
+            backToShopBtn.addEventListener('click', () => {
+                window.location.href = '/';
+            });
+
+            // Initialize authentication
+            try {
+                const authSuccess = await window.adminAuth.initialize();
+                if (!authSuccess) {
+                    return;
+                }
+                
+                // Load users
+                await loadUsers();
+            } catch (error) {
+                console.error('Failed to initialize admin:', error);
+                usersTable.innerHTML = '<tr><td colspan="6" class="px-4 py-2 text-center text-red-500">Authentication failed. Please refresh the page.</td></tr>';
+            }
+
+            async function loadUsers() {
+                try {
+                    const response = await window.adminAuth.get('/api/admin/users');
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to fetch users');
+                    }
+                    
+                    allUsers = await response.json();
+                    renderUsersTable(allUsers);
+                } catch (error) {
+                    console.error('Error loading users:', error);
+                    usersTable.innerHTML = '<tr><td colspan="6" class="px-4 py-2 text-center text-red-500">Error loading users: ' + error.message + '</td></tr>';
+                }
+            }
+
+            function renderUsersTable(users) {
+                usersTable.innerHTML = '';
+                
+                if (users.length === 0) {
+                    usersTable.innerHTML = '<tr><td colspan="6" class="px-4 py-2 text-center text-gray-500">No users found</td></tr>';
+                    return;
+                }
+
+                users.forEach(user => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b hover:bg-gray-50';
+                    
+                    let statusBadge;
+                    if (user.suspended) {
+                        statusBadge = '<span class="inline-block bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded-full">Suspended</span>';
+                    } else if (user.approved) {
+                        statusBadge = '<span class="inline-block bg-green-100 text-green-800 text-xs font-semibold px-2 py-1 rounded-full">Approved</span>';
+                    } else {
+                        statusBadge = '<span class="inline-block bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-1 rounded-full">Pending</span>';
+                    }
+
+                    row.innerHTML = `
+                        <td class="px-4 py-2 font-semibold">${user.username}</td>
+                        <td class="px-4 py-2">${user.email}</td>
+                        <td class="px-4 py-2">
+                            <select class="user-role-select border rounded px-2 py-1" data-user-id="${user.user_id}">
+                                <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
+                                <option value="seller" ${user.role === 'seller' ? 'selected' : ''}>Seller</option>
+                                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+                            </select>
+                        </td>
+                        <td class="px-4 py-2">${statusBadge}</td>
+                        <td class="px-4 py-2">${new Date(user.created_at).toLocaleDateString()}</td>
+                        <td class="px-4 py-2 space-x-2">
+                            ${!user.approved ? `
+                                <button class="approve-user-btn bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors" data-user-id="${user.user_id}">
+                                    Approve
+                                </button>
+                            ` : ''}
+                            ${user.approved && !user.suspended ? `
+                                <button class="suspend-user-btn bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600 transition-colors" data-user-id="${user.user_id}">
+                                    Suspend
+                                </button>
+                            ` : ''}
+                            ${user.suspended ? `
+                                <button class="activate-user-btn bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors" data-user-id="${user.user_id}">
+                                    Activate
+                                </button>
+                            ` : ''}
+                            <button class="delete-user-btn bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors" data-user-id="${user.user_id}">
+                                Delete
+                            </button>
+                        </td>
+                    `;
+                    usersTable.appendChild(row);
+                });
+
+                // Add event listeners to user management buttons
+                addEventListeners();
+            }
+            
+            function addEventListeners() {
+                document.querySelectorAll('.approve-user-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => approveUser(e.target.dataset.userId));
+                });
+                document.querySelectorAll('.suspend-user-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => suspendUser(e.target.dataset.userId));
+                });
+                document.querySelectorAll('.activate-user-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => activateUser(e.target.dataset.userId));
+                });
+                document.querySelectorAll('.delete-user-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => deleteUser(e.target.dataset.userId));
+                });
+                document.querySelectorAll('.user-role-select').forEach(select => {
+                    select.addEventListener('change', (e) => {
+                        updateUserRole(e.target.dataset.userId, e.target.value);
+                    });
+                });
+            }
+
+            async function approveUser(userId) {
+                if (!confirm('Are you sure you want to approve this user?')) return;
+                await fetchAPI(`/api/admin/users/${userId}/approve`, 'POST', 'approving user');
+            }
+
+            async function suspendUser(userId) {
+                if (!confirm('Are you sure you want to suspend this user?')) return;
+                await fetchAPI(`/api/admin/users/${userId}/suspend`, 'POST', 'suspending user');
+            }
+            
+            async function activateUser(userId) {
+                if (!confirm('Are you sure you want to activate this user?')) return;
+                await fetchAPI(`/api/admin/users/${userId}/activate`, 'POST', 'activating user');
+            }
+
+            async function deleteUser(userId) {
+                if (!confirm('Are you sure you want to DELETE this user? This cannot be undone.')) return;
+                await fetchAPI(`/api/admin/users/${userId}`, 'DELETE', 'deleting user');
+            }
+
+            async function updateUserRole(userId, newRole) {
+                await fetchAPI(`/api/admin/users/${userId}/role`, 'PUT', 'updating user role', { role: newRole });
+            }
+
+            async function fetchAPI(url, method, action, body = null) {
+                try {
+                    let response;
+                    if (method === 'GET') {
+                        response = await window.adminAuth.get(url);
+                    } else if (method === 'POST') {
+                        response = await window.adminAuth.post(url, body);
+                    } else if (method === 'PUT') {
+                        response = await window.adminAuth.put(url, body);
+                    } else if (method === 'DELETE') {
+                        response = await window.adminAuth.delete(url);
+                    }
+
+                    if (response.ok) {
+                        await loadUsers(); // Reload user list on success
+                    } else {
+                        const err = await response.json();
+                        alert(`Failed to ${action}: ${err.error || 'Unknown error'}`);
+                    }
+                } catch (error) {
+                    console.error(`Error ${action}:`, error);
+                    alert(`Error ${action}: ${error.message}`);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
