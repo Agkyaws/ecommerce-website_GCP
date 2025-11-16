@@ -77,7 +77,8 @@ stages:
           --platform=managed \
           --allow-unauthenticated \
           --memory=1Gi \
-          --timeout=600
+          --timeout=600 \
+          --update-env-vars="UPLOAD_BUCKET=$(UPLOAD_BUCKET)"
       displayName: '6. Deploy to Cloud Run'
 
     # 8. Verify deployment
