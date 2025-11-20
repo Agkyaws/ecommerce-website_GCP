@@ -120,6 +120,12 @@ def get_db_connection():
                     raise
     return g.db_conn
 
+
+@app.route('/healthz')
+def healthz_check():
+    """Simple health check for load balancer"""
+    return "healthy", 200
+
 @app.teardown_appcontext
 def close_connection(exception):
     """Closes the DB connection at the end of the request."""
